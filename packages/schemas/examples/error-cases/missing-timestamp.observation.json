@@ -1,0 +1,22 @@
+{
+  "_case": "Position ohne Zeitstempel: die Quelle liefert keine Zeit. observed_at fehlt ganz - es wird NICHT stillschweigend ingested_at eingesetzt. quality.time_quality haelt fest, dass Konsumenten auf ingested_at ausweichen muessen, und die UI kann den Wert entsprechend kennzeichnen.",
+  "obs_id": "01HZX8QK3M4N5P6R7S8T9V0W21",
+  "schema_version": "1.0.0",
+  "entity_ref": {
+    "type": "ENTITY_TYPE_AIRCRAFT",
+    "id": "icao24:3c6444",
+    "resolution_status": "RESOLUTION_STATUS_RESOLVED",
+    "resolved_entity_id": "01HZW0000AIRCRAFT3C6444AA"
+  },
+  "ingested_at": "2026-08-28T09:22:00.100Z",
+  "source": { "id": "adsb-lol", "reliability": "SOURCE_RELIABILITY_C" },
+  "kind": "OBSERVATION_KIND_POSITION",
+  "geo": { "lat": 48.3538, "lon": 11.7861, "h3_r7": "871f9a4c4ffffff", "precision": "GEO_PRECISION_EXACT" },
+  "kinematics": { "altitude_m": 10668, "ground_speed_kn": 442 },
+  "quality": {
+    "time_quality": "TIME_QUALITY_INFERRED_FROM_INGEST",
+    "flags": ["no_source_timestamp"]
+  },
+  "raw_ref": "s3://argus-bronze/adsb-lol/2026/08/28/09/part-0002.jsonl#L15",
+  "dedupe_key": "adsb-lol:icao24:3c6444:seq:88213"
+}

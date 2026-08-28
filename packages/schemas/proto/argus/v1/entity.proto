@@ -1,0 +1,179 @@
+// ARGUS — Entity: ein Ding, das ueber Zeit existiert und identifizierbar ist.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Ein externer Bezeichner. Entitaeten haben viele davon, mit
+// unterschiedlicher Stabilitaet (Kapitel 3.3): IMO stabil, MMSI wechselnd.
+message Identifier {
+  // Schema des Bezeichners: "imo", "mmsi", "icao24", "registration",
+  // "callsign", "lei", "hrb", "ticker", "wikidata", "geonames", "unlocode".
+  string scheme = 1;
+  string value = 2;
+  // Stabilitaet des Bezeichners. Steuert das Gewicht im Resolver.
+  IdentifierStability stability = 3;
+  // Gueltigkeitszeitraum. Eine MMSI gehoert nur zeitweise zu einem Schiff.
+  optional TimeRange validity = 4;
+  optional Provenance source = 5;
+  // true fuer den kanonischen Hauptbezeichner dieses Schemas.
+  bool is_primary = 6;
+}
+
+// Stabilitaet eines Bezeichners ueber die Zeit. Bestimmt sein Gewicht in
+// der Entity Resolution.
+enum IdentifierStability {
+  IDENTIFIER_STABILITY_UNSPECIFIED = 0;
+  IDENTIFIER_STABILITY_STABLE = 1; // IMO, LEI, ICAO24
+  IDENTIFIER_STABILITY_MUTABLE = 2; // MMSI, Registrierung
+  IDENTIFIER_STABILITY_EPHEMERAL = 3; // Callsign, Flugnummer
+}
+
+// Art eines alternativen Namens.
+enum AliasKind {
+  ALIAS_KIND_UNSPECIFIED = 0;
+  ALIAS_KIND_NAME = 1;
+  ALIAS_KIND_FORMER_NAME = 2;
+  ALIAS_KIND_TRANSLITERATION = 3;
+  ALIAS_KIND_TRANSLATION = 4;
+  ALIAS_KIND_ABBREVIATION = 5;
+  ALIAS_KIND_CALLSIGN = 6;
+  ALIAS_KIND_TRADE_NAME = 7;
+}
+
+// Ein alternativer Name. Frueherer Name und Transliteration werden
+// getrennt gefuehrt, weil sie beim Abgleich unterschiedlich zaehlen.
+message Alias {
+  string name = 1;
+  AliasKind kind = 2;
+  // BCP-47-Sprachtag des Namens.
+  string lang = 3;
+  // Schriftsystem als ISO 15924 ("Latn", "Cyrl", "Arab"). Wichtig fuer die
+  // Blocking-Stufe der Entity Resolution.
+  string script = 4;
+  optional TimeRange validity = 5;
+  optional Provenance source = 6;
+}
+
+// Sanktionsstand einer Entitaet. NOT_CHECKED und NONE sind bewusst
+// verschieden: ungeprueft ist kein Freibrief.
+enum SanctionStatus {
+  SANCTION_STATUS_UNSPECIFIED = 0;
+  SANCTION_STATUS_NONE = 1; // geprueft, kein Treffer
+  SANCTION_STATUS_LISTED = 2;
+  SANCTION_STATUS_DELISTED = 3;
+  SANCTION_STATUS_ASSOCIATED = 4; // Treffer nur ueber Verbindung
+  SANCTION_STATUS_POSSIBLE_MATCH = 5; // Namenstreffer, nicht verifiziert
+  SANCTION_STATUS_NOT_CHECKED = 6;
+}
+
+// Treffer gegen eine Sanktions-, PEP- oder Watchlist-Quelle.
+message SanctionListing {
+  // Listenkennung: "ofac_sdn", "eu_consolidated", "uk_ofsi", "un_sc".
+  string list_id = 1;
+  // Programmkennung innerhalb der Liste: "IRAN-EO13902".
+  string program = 2;
+  string listing_id = 3;
+  optional google.protobuf.Timestamp listed_at = 4;
+  optional google.protobuf.Timestamp delisted_at = 5;
+  // Sicherheit des Abgleichs, 0..1. Namensbasierte Treffer sind selten sicher.
+  double match_confidence = 6;
+  string matched_on = 7; // "name", "imo", "lei", "address"
+  optional Provenance source = 8;
+  string url = 9;
+}
+
+// Lebenszyklus einer Entitaet im System und in der Realitaet.
+message EntityLifecycle {
+  // Erste und letzte Beobachtung in ARGUS.
+  optional google.protobuf.Timestamp first_seen_at = 1;
+  optional google.protobuf.Timestamp last_seen_at = 2;
+  // Existenz in der Realitaet: Baujahr bis Verschrottung, Gruendung bis
+  // Loeschung. Unabhaengig davon, seit wann ARGUS die Entitaet kennt.
+  optional TimeRange existence = 3;
+  bool is_active = 4;
+}
+
+// Nachvollziehbarkeit von Zusammenfuehrungen. Merge und Unmerge muessen
+// vollstaendig auditierbar sein (Kapitel 3.3).
+message ResolutionAudit {
+  // Entitaets-IDs, die in diese Entitaet zusammengefuehrt wurden.
+  repeated string merged_from = 1;
+  optional google.protobuf.Timestamp merged_at = 2;
+  // "argus:service:resolver", "user:01HZ..." — wer entschieden hat.
+  string decided_by = 3;
+  optional double merge_score = 4;
+  // Version des Resolver-Modells, damit alte Entscheidungen reproduzierbar
+  // bleiben.
+  string resolver_version = 5;
+  // Gesetzt, wenn diese Entitaet aus einer Aufspaltung hervorgegangen ist.
+  optional string split_from = 6;
+  string note = 7;
+}
+
+// Eine Entitaet.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. `observed_at` ist der
+// Zeitpunkt, auf den sich der aktuelle Stammdatenstand bezieht.
+message Entity {
+  string entity_id = 1; // kanonische ULID
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  EntityType type = 10;
+
+  // Anzeigename. Bei Konflikt zwischen Quellen der Name mit der hoechsten
+  // Quellenzuverlaessigkeit; die Alternativen bleiben in `aliases`.
+  string display_name = 11;
+
+  repeated Identifier identifiers = 12;
+  repeated Alias aliases = 13;
+
+  // Typspezifische Stammdaten ohne eigenes Feld: bei Schiffen flag,
+  // vessel_type, built_year, dwt; bei Unternehmen legal_form, jurisdiction.
+  google.protobuf.Struct attributes = 14;
+
+  repeated string tags = 15;
+
+  // Letzte bekannte Position. Denormalisiert fuer Kartenabfragen; die
+  // Historie steht im Track.
+  optional GeoPoint last_known_position = 16;
+  optional google.protobuf.Timestamp last_position_at = 17;
+
+  EntityLifecycle lifecycle = 18;
+
+  SanctionStatus sanction_status = 19;
+  repeated SanctionListing sanction_listings = 20;
+
+  ResolutionAudit resolution = 21;
+
+  // IDs der Watchlists, in denen die Entitaet steht. Denormalisiert, weil
+  // f_watchlist bei jeder Bewertung gebraucht wird.
+  repeated string watchlist_ids = 22;
+
+  repeated VersionInfo versions = 23;
+  uint32 version = 24;
+
+  // Gesetzt, wenn die Entitaet als Dublette eingezogen wurde. Der Datensatz
+  // bleibt erhalten, damit alte Verweise aufloesbar bleiben.
+  optional string merged_into_entity_id = 25;
+
+  // Kennzeichnet Entitaeten mit Personenbezug. Steuert kuerzere
+  // Aufbewahrungsfristen und getrennte Speicherung (Kapitel 14).
+  bool contains_personal_data = 26;
+
+  // Rechtsgrundlage der Verarbeitung bei Personenbezug:
+  // "public_office_holder", "corporate_representative", "consent".
+  string personal_data_basis = 27;
+
+  // Loeschtermin fuer personenbezogene Bestandteile.
+  optional google.protobuf.Timestamp purge_after = 28;
+}

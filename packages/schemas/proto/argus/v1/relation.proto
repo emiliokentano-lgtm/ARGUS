@@ -1,0 +1,88 @@
+// ARGUS — Relation: gerichtete, zeitlich begrenzte Kante zwischen zwei
+// Entitaeten. Grundlage der Link-Analyse (Kapitel 8.3).
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Kantentyp. Geschlossene Liste fuer alles, was im Graph traversiert wird;
+// alles andere geht ueber RELATION_TYPE_OTHER plus `type_label`.
+enum RelationType {
+  RELATION_TYPE_UNSPECIFIED = 0;
+  RELATION_TYPE_OWNS = 1;
+  RELATION_TYPE_BENEFICIAL_OWNER_OF = 2;
+  RELATION_TYPE_CONTROLS = 3;
+  RELATION_TYPE_OPERATES = 4;
+  RELATION_TYPE_MANAGES = 5;
+  RELATION_TYPE_SUBSIDIARY_OF = 6;
+  RELATION_TYPE_PARENT_OF = 7;
+  RELATION_TYPE_DIRECTOR_OF = 8;
+  RELATION_TYPE_EMPLOYED_BY = 9;
+  RELATION_TYPE_MEMBER_OF = 10;
+  RELATION_TYPE_REGISTERED_IN = 11;
+  RELATION_TYPE_FLAGGED_IN = 12; // Schiffsflagge
+  RELATION_TYPE_LOCATED_AT = 13;
+  RELATION_TYPE_DOCKED_AT = 14;
+  RELATION_TYPE_SUPPLIES_TO = 15;
+  RELATION_TYPE_CUSTOMER_OF = 16;
+  RELATION_TYPE_TRANSPORTED_BY = 17;
+  RELATION_TYPE_SANCTIONED_BY = 18;
+  RELATION_TYPE_PART_OF = 19;
+  RELATION_TYPE_CONNECTED_TO = 20; // physische Infrastruktur
+  RELATION_TYPE_RENDEZVOUS_WITH = 21; // aus Detektortreffer erzeugt
+  RELATION_TYPE_SUCCESSOR_OF = 22;
+  RELATION_TYPE_ASSOCIATED_WITH = 23; // bewusst unspezifisch
+  RELATION_TYPE_OTHER = 24;
+}
+
+// Eine Kante.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. `observed_at` ist der
+// Zeitpunkt, zu dem die Quelle die Beziehung behauptet hat - nicht zu
+// verwechseln mit `validity`, dem Zeitraum, in dem die Beziehung besteht.
+message Relation {
+  string relation_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  RelationType type = 10;
+  // Nur bei RELATION_TYPE_OTHER zu setzen: quellnatives Label, damit die
+  // Information nicht verloren geht, bevor der Typ ins Enum aufgenommen wird.
+  string type_label = 11;
+
+  EntityRef from = 12;
+  EntityRef to = 13;
+
+  // Gueltigkeitszeitraum der Beziehung. Ohne ihn ist "wer gehoerte 2023 zu
+  // wem" nicht beantwortbar. `end` fehlt bei laufenden Beziehungen.
+  TimeRange validity = 14;
+
+  // Staerke/Anteil, wo sinnvoll: Beteiligungsquote 0..1, Liefervolumen.
+  optional double weight = 15;
+  string weight_unit = 16;
+
+  Confidence confidence = 17;
+
+  repeated Evidence evidence = 18;
+
+  google.protobuf.Struct attributes = 19;
+
+  // false bei symmetrischen Beziehungen (RENDEZVOUS_WITH, CONNECTED_TO).
+  bool directed = 20;
+
+  repeated VersionInfo versions = 21;
+  uint32 version = 22;
+
+  optional Retraction retraction = 23;
+  repeated Contradiction contradictions = 24;
+
+  string dedupe_key = 25;
+}

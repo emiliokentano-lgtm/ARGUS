@@ -1,0 +1,39 @@
+{
+  "_case": "Zurueckgezogene Meldung: die Quelle hat widerrufen. Der Datensatz wird nicht geloescht, sondern auf RETRACTED gesetzt und um einen Retraction-Block ergaenzt. Die Versionskette zeigt, was sich wann geaendert hat - ein Nutzer, der den Vorgang gestern gesehen hat, findet ihn wieder.",
+  "event_id": "01HZY4T5V6W7X8Y9Z0A1B2C3D7",
+  "schema_version": "1.0.0",
+  "observed_at": "2026-08-27T21:10:00.000Z",
+  "ingested_at": "2026-08-27T21:10:35.000Z",
+  "source": { "id": "wire-xyz", "reliability": "SOURCE_RELIABILITY_D" },
+  "raw_ref": "s3://argus-bronze/wire-xyz/2026/08/27/21/part-0009.jsonl#L44",
+  "type": "maritime.port_closure",
+  "title": "Hafen vorruebergehend geschlossen",
+  "summary": "Meldung ueber eine Hafenschliessung. Die Quelle hat die Meldung am Folgetag zurueckgezogen.",
+  "lang": "de",
+  "occurred_at": {
+    "start": "2026-08-27T20:00:00Z",
+    "precision": "TIME_PRECISION_HOUR"
+  },
+  "geo": {
+    "precision": "GEO_PRECISION_CITY",
+    "place_name": "Gdansk",
+    "place": { "country_iso3166_1": "PL" }
+  },
+  "severity": 0.3,
+  "confidence": 0.05,
+  "corroboration": { "independent_sources": 1, "first_seen_source": "wire-xyz", "contradicting_sources": 4 },
+  "status": "EVENT_STATUS_RETRACTED",
+  "retraction": {
+    "retracted_at": "2026-08-28T07:30:00Z",
+    "retracted_by_source": "wire-xyz",
+    "reason": "Verwechslung mit einer planmaessigen Wartung. Meldung zurueckgezogen.",
+    "inferred_by_system": false
+  },
+  "version": 2,
+  "versions": [
+    { "v": 1, "at": "2026-08-27T21:10:35Z", "changed": [], "author": "argus:service:ingest-news", "reason": "Erstanlage" },
+    { "v": 2, "at": "2026-08-28T07:30:12Z", "changed": ["/status", "/retraction", "/confidence"], "author": "argus:service:ingest-news", "reason": "Quelle hat widerrufen" }
+  ],
+  "reports": ["01HZY4T5V6REPORT0000000031"],
+  "dedupe_key": "wire-xyz:port_closure:gdansk:2026-08-27T20:00:00Z"
+}

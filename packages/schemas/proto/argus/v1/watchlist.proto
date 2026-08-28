@@ -1,0 +1,99 @@
+// ARGUS — Watchlist: benannte Menge von Entitaeten oder Mustern mit
+// Alarmbindung. Input fuer f_watchlist in der Score-Engine.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Wie ein Watchlist-Eintrag auf Objekte abgeglichen wird.
+enum MatchMode {
+  MATCH_MODE_UNSPECIFIED = 0;
+  MATCH_MODE_EXACT_ID = 1; // Treffer nur ueber Bezeichner
+  MATCH_MODE_ENTITY = 2; // Treffer ueber aufgeloeste Entitaets-ID
+  MATCH_MODE_PATTERN = 3; // Glob/Regex auf Namen oder Bezeichner
+  MATCH_MODE_FUZZY_NAME = 4; // Namensaehnlichkeit oberhalb Schwellwert
+  MATCH_MODE_ATTRIBUTE = 5; // Attributbedingung, z. B. flag == "PA"
+}
+
+// Ein Eintrag einer Watchlist.
+message WatchlistMember {
+  // Gesetzt bei EXACT_ID und ENTITY.
+  optional EntityRef ref = 1;
+  // Gesetzt bei PATTERN und FUZZY_NAME.
+  string pattern = 2;
+  // Gesetzt bei ATTRIBUTE: Attributpfad und erwarteter Wert.
+  string attribute_path = 3;
+  optional google.protobuf.Value attribute_value = 4;
+
+  MatchMode match_mode = 5;
+
+  // Trefferstaerke dieses Eintrags, 0..1. Erlaubt abgestufte statt binaerer
+  // Watchlists (Kapitel 7.1).
+  double weight = 6;
+  // Mindestaehnlichkeit bei FUZZY_NAME.
+  optional double min_similarity = 7;
+
+  // Gueltigkeitszeitraum. Ein Eintrag kann befristet sein.
+  optional TimeRange validity = 8;
+
+  string note = 9;
+  string added_by = 10;
+  optional google.protobuf.Timestamp added_at = 11;
+
+  // Bei Import aus einer externen Liste: Herkunft des Eintrags.
+  optional Provenance source = 12;
+}
+
+// Eine Watchlist.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto.
+message Watchlist {
+  string watchlist_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  string name = 10;
+  string description = 11;
+
+  repeated WatchlistMember members = 12;
+  uint32 member_count = 13;
+
+  // Standardgewicht fuer Mitglieder ohne eigenes Gewicht.
+  double default_weight = 14;
+
+  // Regeln, die auf diese Watchlist verweisen. Denormalisiert, damit die UI
+  // vor dem Loeschen warnen kann.
+  repeated string rule_ids = 15;
+
+  // Herkunft bei automatisch gepflegten Listen: "opensanctions", "ofac_sdn".
+  // Leer bei manuell gepflegten Listen.
+  string import_source_id = 16;
+  optional google.protobuf.Timestamp last_import_at = 17;
+  // true, wenn manuelle Aenderungen beim naechsten Import ueberschrieben
+  // werden.
+  bool is_managed = 18;
+
+  string owner_id = 19;
+  Visibility visibility = 20;
+  repeated string shared_with = 21;
+
+  repeated string tags = 22;
+  bool active = 23;
+
+  optional google.protobuf.Timestamp created_at = 24;
+  optional google.protobuf.Timestamp updated_at = 25;
+
+  google.protobuf.Struct attributes = 26;
+
+  // Kennzeichnet Listen mit Personenbezug (PEP-Listen). Steuert Zugriff und
+  // Aufbewahrung.
+  bool contains_personal_data = 27;
+}

@@ -1,0 +1,145 @@
+// ARGUS — Report: ein Medienartikel oder eine Meldung, die auf Ereignisse und
+// Entitaeten verweist.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Art der Meldung. Bestimmt die Standardglaubwuerdigkeit und die
+// Extraktionsstrategie.
+enum ReportKind {
+  REPORT_KIND_UNSPECIFIED = 0;
+  REPORT_KIND_NEWS_ARTICLE = 1;
+  REPORT_KIND_AGENCY_WIRE = 2;
+  REPORT_KIND_PRESS_RELEASE = 3;
+  REPORT_KIND_GOVERNMENT_NOTICE = 4; // Amtsblatt, Behoerdenmitteilung
+  REPORT_KIND_REGULATORY_FILING = 5; // SEC, Bundesanzeiger
+  REPORT_KIND_SOCIAL_POST = 6;
+  REPORT_KIND_BLOG = 7;
+  REPORT_KIND_SITUATION_REPORT = 8; // ReliefWeb, OCHA
+  REPORT_KIND_ADVISORY = 9; // NOTAM, Navtex, Sicherheitshinweis
+  REPORT_KIND_DATASET_RECORD = 10; // GDELT-Zeile, strukturierter Datensatz
+}
+
+// Ergebnis der Sprachverarbeitung fuer einen Text.
+message TextAnalysis {
+  // Erkannte Sprache als BCP-47 mit Konfidenz.
+  string lang = 1;
+  optional double lang_confidence = 2;
+  // Ton, -1 (negativ) bis +1 (positiv). Optional, weil Sentiment nur in
+  // Domaenen mit trainiertem Modell belastbar ist.
+  optional double sentiment = 3;
+  string sentiment_model = 4;
+  // ID des Embedding-Vektors im Vektorspeicher. Der Vektor selbst gehoert
+  // nicht in die Nachricht.
+  string embedding_id = 5;
+  string embedding_model = 6;
+  // Zugeordnete Taxonomiepfade mit Konfidenz.
+  repeated Classification classifications = 7;
+}
+
+// Zuordnung eines Textes zu einem Taxonomiepfad.
+message Classification {
+  string label = 1; // Taxonomiepfad, z. B. "conflict.naval_incident"
+  double confidence = 2;
+  string model = 3;
+}
+
+// Eine Uebersetzung. Das Original wird immer mitgespeichert (Kapitel 11).
+message Translation {
+  string lang = 1;
+  string title = 2;
+  string body_text = 3;
+  ModelProvenance model = 4;
+}
+
+// Kennwerte der Deduplizierung (Kapitel 6.3).
+message DedupeInfo {
+  // 64-Bit-SimHash als Hexstring. Nicht als uint64, weil die JSON-Abbildung
+  // von 64-Bit-Ganzzahlen ein String waere und Hex hier lesbarer ist.
+  string simhash_hex = 1;
+  repeated string minhash_buckets = 2;
+  // Exakter Hash ueber den normalisierten Text.
+  string content_hash = 3;
+  // Repraesentant des Story-Clusters, dem der Report zugeordnet wurde.
+  string story_cluster_id = 4;
+  // true, wenn dieser Report der Erstmelder des Clusters ist.
+  bool is_cluster_representative = 5;
+  // Aehnlichkeit zum Cluster-Zentroid, 0..1.
+  optional double cluster_similarity = 6;
+  // ID des Reports, der als Original erkannt wurde (Agenturuebernahme).
+  optional string duplicate_of_report_id = 7;
+}
+
+// Ein Bericht.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. `observed_at` entspricht
+// dem Veroeffentlichungszeitpunkt, soweit die Quelle ihn liefert.
+message Report {
+  string report_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  ReportKind kind = 10;
+
+  string url = 11;
+  // Kanonische URL nach Aufloesung von Weiterleitungen und Trackingparametern.
+  string canonical_url = 12;
+
+  string title = 13;
+  string summary = 14;
+
+  // Volltext. Wird nur gespeichert, wenn die Lizenz es erlaubt; sonst bleibt
+  // das Feld leer und `body_ref` zeigt auf das Bronze-Objekt.
+  string body_text = 15;
+  string body_ref = 16;
+  // true, wenn der Volltext aus Lizenzgruenden nicht gespeichert wurde.
+  bool body_withheld_for_license = 17;
+
+  // Veroeffentlichung laut Quelle. Getrennt von observed_at, weil viele Feeds
+  // aeltere Artikel nachliefern.
+  optional google.protobuf.Timestamp published_at = 18;
+  optional google.protobuf.Timestamp modified_at = 19;
+
+  string publisher = 20;
+  repeated string authors = 21;
+  // Herkunftsland der Publikation als ISO 3166-1 Alpha-2. Input fuer
+  // NARRATIVE_DIVERGENCE.
+  string publisher_country = 22;
+
+  TextAnalysis analysis = 23;
+  repeated Translation translations = 24;
+
+  // Erkannte Entitaeten im Text, unaufgeloest zulaessig.
+  repeated EntityRef mentions = 25;
+  // Ereignisse, auf die der Bericht verweist.
+  repeated string event_ids = 26;
+  // Georeferenzen aus dem Geoparsing, jeweils mit eigener Praezision.
+  repeated GeoLocation places = 27;
+
+  DedupeInfo dedupe = 28;
+
+  bool is_paywalled = 29;
+  string license_id = 30;
+  // Pflichtangabe zur Quellennennung, falls die Lizenz sie verlangt.
+  string attribution_text = 31;
+
+  Score scores = 32;
+
+  optional Retraction retraction = 33;
+
+  google.protobuf.Struct attributes = 34;
+  repeated string tags = 35;
+  string dedupe_key = 36;
+
+  repeated VersionInfo versions = 37;
+  uint32 version = 38;
+}

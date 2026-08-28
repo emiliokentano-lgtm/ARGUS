@@ -1,0 +1,43 @@
+{
+  "_case": "Ereignis ohne exakten Ort: bekannt ist nur das Land. geo.geometry fehlt vollstaendig, precision = GEO_PRECISION_COUNTRY, der Ort steckt in place. Es wird kein Punkt in der Landesmitte erfunden; representative_point bliebe leer, und wenn die Karte einen setzt, ist representative_point_is_derived true.",
+  "event_id": "01HZY4T5V6W7X8Y9Z0A1B2C3D5",
+  "schema_version": "1.0.0",
+  "observed_at": "2026-08-28T06:02:00.000Z",
+  "ingested_at": "2026-08-28T06:02:44.120Z",
+  "source": { "id": "gdelt", "reliability": "SOURCE_RELIABILITY_C" },
+  "raw_ref": "s3://argus-bronze/gdelt/2026/08/28/06/20260828060000.export.csv#L20481",
+  "type": "civil.general_strike",
+  "title": "Landesweiter Generalstreik angekuendigt",
+  "summary": "Mehrere Gewerkschaftsverbaende kuendigen einen landesweiten Streik an. Ein Ort ist der Meldung nicht zu entnehmen.",
+  "lang": "en",
+  "occurred_at": {
+    "start": "2026-08-31T00:00:00Z",
+    "end": null,
+    "precision": "TIME_PRECISION_DAY"
+  },
+  "geo": {
+    "precision": "GEO_PRECISION_COUNTRY",
+    "place_name": "Argentinien",
+    "place": {
+      "wikidata_qid": "Q414",
+      "country_iso3166_1": "AR"
+    },
+    "representative_point_is_derived": false,
+    "uncertainty_radius_m": 1400000
+  },
+  "entities": [],
+  "severity": 0.44,
+  "confidence": 0.6,
+  "corroboration": { "independent_sources": 2, "first_seen_source": "gdelt" },
+  "reports": ["01HZY4T5V6REPORT0000000011"],
+  "status": "EVENT_STATUS_REPORTED",
+  "gaps": [
+    {
+      "start": "2026-08-28T06:02:00Z",
+      "reason": "GAP_REASON_NO_COVERAGE",
+      "detail": "Keine georeferenzierte Quelle unterhalb der Landesebene verfuegbar.",
+      "source_id": "gdelt"
+    }
+  ],
+  "dedupe_key": "gdelt:20260828060000:20481"
+}

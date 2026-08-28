@@ -1,0 +1,137 @@
+// ARGUS — Case: Arbeitsbehaelter fuer eine Untersuchung.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Bearbeitungsstand einer Untersuchung.
+enum CaseStatus {
+  CASE_STATUS_UNSPECIFIED = 0;
+  CASE_STATUS_OPEN = 1;
+  CASE_STATUS_INVESTIGATING = 2;
+  CASE_STATUS_ON_HOLD = 3;
+  CASE_STATUS_CLOSED = 4;
+  CASE_STATUS_ARCHIVED = 5;
+}
+
+// Dringlichkeit einer Untersuchung. Unabhaengig vom Prioritaets-Score der
+// enthaltenen Ereignisse: ein Case kann aus lauter kleinen Signalen bestehen.
+enum CasePriority {
+  CASE_PRIORITY_UNSPECIFIED = 0;
+  CASE_PRIORITY_LOW = 1;
+  CASE_PRIORITY_MEDIUM = 2;
+  CASE_PRIORITY_HIGH = 3;
+  CASE_PRIORITY_URGENT = 4;
+}
+
+// Ein verknuepftes Objekt im Case.
+message CaseItem {
+  ObjectRef ref = 1;
+  string added_by = 2;
+  optional google.protobuf.Timestamp added_at = 3;
+  string note = 4;
+  // Rolle des Objekts in der Untersuchung: "trigger", "supporting",
+  // "contradicting", "background".
+  string role = 5;
+  // true, wenn das Objekt als Kernbeleg gilt.
+  bool is_key_item = 6;
+}
+
+// Freitextnotiz in einer Untersuchung.
+message CaseNote {
+  string note_id = 1;
+  string author_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  optional google.protobuf.Timestamp updated_at = 4;
+  // Markdown.
+  string body = 5;
+  // Erwaehnte Nutzer-IDs.
+  repeated string mentions = 6;
+  // Objekte, auf die sich die Notiz bezieht.
+  repeated ObjectRef refs = 7;
+  // Gesetzt, wenn die Notiz an einem konkreten Objekt haengt statt am Case.
+  optional ObjectRef anchor = 8;
+}
+
+// Aufgabe innerhalb einer Untersuchung.
+message CaseTask {
+  string task_id = 1;
+  string title = 2;
+  string assignee_id = 3;
+  optional google.protobuf.Timestamp due_at = 4;
+  bool done = 5;
+  optional google.protobuf.Timestamp completed_at = 6;
+  string note = 7;
+}
+
+// Kartenannotation im Kontext einer Untersuchung (Kapitel 12).
+message CaseAnnotation {
+  string annotation_id = 1;
+  string author_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  Geometry geometry = 4;
+  string label = 5;
+  // Darstellungshinweise (Farbe, Strichstaerke) ohne eigene Typisierung.
+  google.protobuf.Struct style = 6;
+  optional TimeRange valid_for = 7;
+}
+
+// Eine Untersuchung.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. Cases sind
+// nutzererzeugt; `source` traegt "argus:user:<user_id>".
+message Case {
+  string case_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  string title = 10;
+  string description = 11;
+  CaseStatus status = 12;
+  CasePriority priority = 13;
+
+  string owner_id = 14;
+  repeated string assignee_ids = 15;
+
+  repeated CaseItem items = 16;
+  repeated CaseNote notes = 17;
+  repeated CaseTask tasks = 18;
+  repeated CaseAnnotation annotations = 19;
+
+  // Hypothesen als Assessment-IDs. Sie liegen bewusst nicht inline, damit sie
+  // dieselbe Beleg- und Konfidenzpflicht erfuellen wie jede andere Bewertung.
+  repeated string hypothesis_ids = 20;
+
+  // Untersuchungsgegenstand in Raum und Zeit.
+  repeated string aoi_ids = 21;
+  optional TimeRange period = 22;
+
+  repeated string tags = 23;
+  Visibility visibility = 24;
+  repeated string shared_with = 25;
+
+  optional google.protobuf.Timestamp created_at = 26;
+  optional google.protobuf.Timestamp updated_at = 27;
+  optional google.protobuf.Timestamp closed_at = 28;
+  string closure_reason = 29;
+
+  // Bekannte Informationsluecken der Untersuchung. Ein Abschlussbericht muss
+  // ausweisen, was offen geblieben ist (Kapitel 12).
+  repeated DataGap gaps = 30;
+
+  google.protobuf.Struct attributes = 31;
+
+  repeated VersionInfo versions = 32;
+  uint32 version = 33;
+
+  // true, wenn der Case personenbezogene Daten enthaelt.
+  bool contains_personal_data = 34;
+}

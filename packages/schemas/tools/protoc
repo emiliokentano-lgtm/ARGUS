@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# protoc-Shim fuer die eingebauten Generatoren (python, pyi).
+#
+# In dieser Umgebung gibt es kein protoc-Binary; grpcio-tools bringt denselben
+# Compiler als Python-Modul mit und reicht alle Argumente unveraendert an
+# protoc weiter. Wer ein echtes protoc installiert hat, setzt stattdessen
+# ARGUS_PROTOC auf dessen Pfad.
+set -eu
+
+if [ -n "${ARGUS_PROTOC:-}" ]; then
+  exec "${ARGUS_PROTOC}" "$@"
+fi
+
+SCHEMA_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+if [ -n "${ARGUS_PROTOC_PYTHON:-}" ]; then
+  PY="${ARGUS_PROTOC_PYTHON}"
+elif [ -x "${SCHEMA_DIR}/.venv/bin/python" ]; then
+  PY="${SCHEMA_DIR}/.venv/bin/python"
+else
+  PY="python3"
+fi
+
+if ! "${PY}" -c "import grpc_tools.protoc" >/dev/null 2>&1; then
+  echo "protoc-Shim: grpcio-tools fehlt in ${PY}. 'make setup' ausfuehren." >&2
+  exit 1
+fi
+
+exec "${PY}" -m grpc_tools.protoc "$@"

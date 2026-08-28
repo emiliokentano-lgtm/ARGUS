@@ -1,0 +1,173 @@
+// ARGUS — Event: ein abgegrenztes Geschehen mit Ort und Zeit. Zentrales
+// Objekt der Priorisierung.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Belastbarkeit der Aussage, dass das Ereignis stattgefunden hat.
+// Getrennt von `confidence`: der Status ist eine redaktionelle Einstufung,
+// die Konfidenz ein numerischer Wert.
+enum EventStatus {
+  EVENT_STATUS_UNSPECIFIED = 0;
+  EVENT_STATUS_RUMORED = 1; // eine unbestaetigte Quelle
+  EVENT_STATUS_REPORTED = 2; // gemeldet, nicht unabhaengig bestaetigt
+  EVENT_STATUS_CONFIRMED = 3; // mehrfach unabhaengig bestaetigt
+  EVENT_STATUS_DISPUTED = 4; // Quellen widersprechen sich
+  EVENT_STATUS_RETRACTED = 5; // zurueckgezogen
+  EVENT_STATUS_SUPERSEDED = 6; // durch ein praeziseres Ereignis ersetzt
+  // Termin, der noch bevorsteht (Wirtschaftskalender, Wahl, Sitzung).
+  EVENT_STATUS_SCHEDULED = 7;
+}
+
+// Rolle einer Entitaet im Ereignis.
+enum EntityRole {
+  ENTITY_ROLE_UNSPECIFIED = 0;
+  ENTITY_ROLE_ACTOR = 1; // handelnd
+  ENTITY_ROLE_TARGET = 2; // betroffen durch Handlung
+  ENTITY_ROLE_AFFECTED = 3; // mittelbar betroffen
+  ENTITY_ROLE_LOCATION = 4; // Ort des Geschehens
+  ENTITY_ROLE_MENTIONED = 5; // nur erwaehnt
+  ENTITY_ROLE_SOURCE = 6; // meldende Stelle
+  ENTITY_ROLE_OPERATOR = 7;
+  ENTITY_ROLE_OWNER = 8;
+}
+
+// Beteiligung einer Entitaet an einem Ereignis.
+message EventEntity {
+  EntityRef ref = 1;
+  EntityRole role = 2;
+  // Konfidenz der Rollenzuweisung, nicht der Entitaetsaufloesung
+  // (die steht in ref.match_confidence).
+  optional double role_confidence = 3;
+}
+
+// Verknuepfung zu einem anderen Ereignis. Bewusst als Hypothese modelliert:
+// Kausalitaet wird nie als Fakt behauptet (Kapitel 6.4).
+enum EventLinkType {
+  EVENT_LINK_TYPE_UNSPECIFIED = 0;
+  EVENT_LINK_TYPE_DUPLICATE_OF = 1;
+  EVENT_LINK_TYPE_PART_OF = 2; // gehoert zu einem Grossereignis
+  EVENT_LINK_TYPE_FOLLOWS = 3; // zeitliche Folge, keine Kausalaussage
+  EVENT_LINK_TYPE_CAUSED_BY_HYPOTHESIS = 4;
+  EVENT_LINK_TYPE_CONTRADICTS = 5;
+  EVENT_LINK_TYPE_UPDATES = 6;
+  EVENT_LINK_TYPE_CORRELATED_WITH = 7;
+}
+
+// Gerichtete Verknuepfung zwischen zwei Ereignissen.
+message EventLink {
+  EventLinkType type = 1;
+  string event_id = 2;
+  // Staerke der Verknuepfung, 0..1. Bei Hypothesen zwingend zu setzen.
+  optional double strength = 3;
+  string rationale = 4;
+  // Wer die Verknuepfung erzeugt hat: "argus:service:correlator", "user:...".
+  string created_by = 5;
+}
+
+// Groessenangabe eines Ereignisses in seiner Fachdomaene. Ohne sie ist
+// f_severity nicht berechenbar (Erdbeben M7 gegen M4).
+message Magnitude {
+  // "richter", "saffir_simpson", "basis_points", "fatalities", "usd",
+  // "teu_per_day", "percent".
+  string scale = 1;
+  double value = 2;
+  string unit = 3;
+  // Fuer Ereignisse mit Erwartungswert (Zinsentscheid, CPI): der vorher
+  // erwartete Wert. Die Ueberraschung ist der eigentliche Marktimpuls.
+  optional double expected_value = 4;
+  optional double previous_value = 5;
+}
+
+// Ein Ereignis.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto.
+// `observed_at` ist hier der Zeitpunkt, zu dem ARGUS zum ersten Mal von dem
+// Ereignis erfahren hat; `occurred_at` ist der Zeitpunkt des Geschehens
+// selbst. Beides auseinanderzuhalten ist die Voraussetzung fuer
+// "was wussten wir wann" (Kapitel 3.4).
+message Event {
+  string event_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  // Hierarchischer Taxonomiepfad, punktgetrennt und von grob nach fein:
+  // "economic.rate_decision", "natural.earthquake", "conflict.airstrike".
+  // Bewusst ein String und kein Enum: die Taxonomie waechst schneller als das
+  // Schema und wird in data/taxonomies gepflegt und validiert.
+  string type = 10;
+
+  string title = 11;
+  string summary = 12;
+
+  // Zeit des Geschehens (Valid Time), mit Genauigkeit.
+  TimeRange occurred_at = 13;
+
+  // Ort des Geschehens. Deckt den Fehlerfall "nur Landangabe" ab:
+  // geometry fehlt, precision = GEO_PRECISION_COUNTRY.
+  GeoLocation geo = 14;
+
+  repeated EventEntity entities = 15;
+
+  // Schwere, 0..1, normalisiert ueber Domaenen hinweg. Erlaubt den Vergleich
+  // zwischen einem Erdbeben und einem Zinsentscheid, ohne beide gleichzusetzen.
+  double severity = 16;
+
+  // Konfidenz, dass das Ereignis so stattgefunden hat, 0..1.
+  double confidence = 17;
+
+  Corroboration corroboration = 18;
+
+  // IDs der belegenden Report-Objekte.
+  repeated string reports = 19;
+
+  // ID des Story-Clusters aus der semantischen Deduplizierung.
+  optional string story_cluster_id = 20;
+
+  Score scores = 21;
+
+  EventStatus status = 22;
+
+  repeated VersionInfo versions = 23;
+
+  // Gesetzt, sobald status = RETRACTED.
+  optional Retraction retraction = 24;
+
+  // Offene Widersprueche zwischen Quellen. Nicht leer, wenn status = DISPUTED.
+  repeated Contradiction contradictions = 25;
+
+  repeated EventLink links = 26;
+
+  optional Magnitude magnitude = 27;
+
+  // Domaenenspezifische Zusatzfelder ohne eigenen Typ.
+  google.protobuf.Struct attributes = 28;
+
+  // Freie Schlagworte fuer Filterung: "sanctions", "chokepoint", "energy".
+  repeated string tags = 29;
+
+  // Deterministischer Idempotenzschluessel des erzeugenden Konnektors.
+  string dedupe_key = 30;
+
+  // Fortlaufende Versionsnummer. Entspricht dem hoechsten `v` in `versions`.
+  uint32 version = 31;
+
+  // Bekannte Luecken im Informationsstand zu diesem Ereignis. Ein Briefing
+  // muss ausweisen koennen, was es nicht weiss (Kapitel 12).
+  repeated DataGap gaps = 32;
+
+  // Sprache von title/summary als BCP-47-Tag ("de", "en", "ar").
+  string lang = 33;
+
+  // Gesetzt, wenn title/summary maschinell erzeugt oder uebersetzt wurden.
+  optional ModelProvenance generated_by = 34;
+}

@@ -1,0 +1,132 @@
+// ARGUS — Observation: eine Messung oder Meldung ueber eine Entitaet zu einem
+// Zeitpunkt an einem Ort. Haeufigste Nachricht im System (AIS, ADS-B,
+// Kursnotierung, Sensormesswert).
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Art der Beobachtung. Steuert, welche der optionalen Bloecke belegt sind.
+enum ObservationKind {
+  OBSERVATION_KIND_UNSPECIFIED = 0;
+  OBSERVATION_KIND_POSITION = 1; // AIS/ADS-B-Position
+  OBSERVATION_KIND_STATUS = 2; // Zustandsmeldung ohne Position
+  OBSERVATION_KIND_MEASUREMENT = 3; // Zeitreihenpunkt, Sensorwert, Kurs
+  OBSERVATION_KIND_STATIC_DATA = 4; // Stammdatenmeldung (AIS Typ 5, Voyage)
+}
+
+// Bewegungsgroessen. Alle Felder optional: 0 ist ein gueltiger Kurs und eine
+// gueltige Geschwindigkeit, "nicht gemeldet" ist etwas anderes als 0.
+// AIS liefert heading haeufig gar nicht, ADS-B liefert je nach Nachrichtentyp
+// unterschiedliche Teilmengen.
+message Kinematics {
+  optional double sog_kn = 1; // Speed over ground, Knoten
+  optional double cog_deg = 2; // Course over ground, 0..360
+  optional double heading_deg = 3; // Bugrichtung, 0..360
+  optional double draft_m = 4; // gemeldeter Tiefgang
+  optional double altitude_m = 5; // geometrische Hoehe (WGS84)
+  optional double altitude_baro_m = 6; // barometrische Hoehe
+  optional double vertical_rate_ms = 7;
+  optional double rate_of_turn_deg_min = 8;
+  optional double ground_speed_kn = 9;
+  optional double true_airspeed_kn = 10;
+  optional double track_deg = 11; // Kurs ueber Grund bei Luftfahrzeugen
+}
+
+// Ein Zeitreihen- oder Sensorwert. Deckt FRED/ECB/Marktdaten ab, fuer die
+// "Position" bedeutungslos ist.
+message Measurement {
+  // Kanonischer Kennungsstring der Reihe: "fred:DGS10", "binance:BTCUSDT.last".
+  string metric = 1;
+  double value = 2;
+  // Einheit als UCUM- oder freier Code: "percent", "USD", "kn", "m".
+  string unit = 3;
+  // Bezugszeitraum des Werts, falls er nicht punktuell ist (Monatswert etc.).
+  optional TimeRange reference_period = 4;
+  // Revisionsnummer der Quelle. Datenrevisionen duerfen historische Werte
+  // nicht stillschweigend ueberschreiben, sondern erzeugen eine neue
+  // Observation mit hoeherer Revision.
+  optional uint32 revision = 5;
+  // Wert der vorherigen Revision, falls diese Meldung eine Revision ist.
+  optional double previous_value = 6;
+  bool is_preliminary = 7;
+}
+
+// Qualitaetsangaben zur Beobachtung. Jede Ableitung, die nicht direkt gemessen
+// wurde, muss hier gekennzeichnet sein.
+message ObservationQuality {
+  optional double position_accuracy_m = 1;
+  // true: Position wurde zwischen zwei Meldungen berechnet, nicht gemeldet.
+  bool is_interpolated = 2;
+  // true: Position stammt aus Koppelnavigation nach Signalverlust.
+  bool is_dead_reckoned = 3;
+  // Radius der Unsicherheit um die Position. Waechst bei Koppelnavigation mit
+  // der Zeit seit der letzten echten Meldung.
+  optional double uncertainty_radius_m = 4;
+  // Herkunft des Zeitstempels. Deckt den Fehlerfall "Position ohne
+  // Zeitstempel" ab.
+  TimeQuality time_quality = 5;
+  // Vom Detektor als moegliche Manipulation markiert (Spoofing-Verdacht).
+  bool is_suspected_spoof = 6;
+  // Sekunden zwischen dieser und der vorherigen Beobachtung derselben
+  // Entitaet. Basis fuer Luckenerkennung ohne erneute Abfrage.
+  optional double seconds_since_previous = 7;
+  // Freitextliste erkannter Qualitaetsprobleme: "impossible_speed",
+  // "duplicate_mmsi", "future_timestamp".
+  repeated string flags = 8;
+}
+
+// Eine Beobachtung.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto beschrieben.
+message Observation {
+  string obs_id = 1; // ULID
+  string schema_version = 2;
+
+  // Zeitpunkt der Messung laut Quelle (Valid Time).
+  // OPTIONAL und damit ausdruecklich abwesend, wenn die Quelle keinen
+  // Zeitstempel liefert. Es wird nicht stillschweigend ingested_at eingesetzt;
+  // quality.time_quality haelt fest, was der Fall ist.
+  optional google.protobuf.Timestamp observed_at = 3;
+
+  // Zeitpunkt, zu dem ARGUS die Meldung angenommen hat (Transaction Time).
+  // Immer gesetzt, systemseitig vergeben.
+  google.protobuf.Timestamp ingested_at = 4;
+
+  Provenance source = 5;
+
+  // Zeiger auf die unveraenderte Rohantwort im Bronze-Archiv, inkl. Zeilen-
+  // oder Offsetangabe: "s3://argus-bronze/aisstream/2026/08/28/09/part-0012.jsonl#L4471".
+  string raw_ref = 6;
+
+  reserved 7 to 9; // reserviert fuer Header-Erweiterungen
+
+  // Beobachtete Entitaet. Bleibt auch unaufgeloest erhalten.
+  EntityRef entity_ref = 10;
+
+  ObservationKind kind = 11;
+
+  // Fehlt bei Beobachtungen ohne Ortsbezug (Zeitreihenwerte, Statusmeldungen).
+  optional GeoPoint geo = 12;
+
+  optional Kinematics kinematics = 13;
+  optional Measurement measurement = 14;
+
+  // Quellspezifische Zusatzfelder, die nicht typisiert sind:
+  // nav_status, destination, squawk, callsign, eta, cargo_type.
+  // Kernfelder gehoeren nicht hierher.
+  google.protobuf.Struct attributes = 15;
+
+  ObservationQuality quality = 16;
+
+  // Deterministischer Schluessel zur Idempotenz, vom Konnektor gebildet
+  // (Hash ueber stabile Rohfelder). Doppelte Zustellung erzeugt denselben Wert.
+  string dedupe_key = 17;
+
+  // ID des Tracks, dem die Beobachtung zugeordnet wurde. Wird erst nach der
+  // Track-Zuordnung gesetzt.
+  optional string track_id = 18;
+}

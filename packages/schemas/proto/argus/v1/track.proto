@@ -1,0 +1,121 @@
+// ARGUS — Track: zeitgeordnete Folge von Beobachtungen einer Entitaet.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+// Ein Punkt der Bewegungsspur. Bewusst schlank gehalten: ein Track kann
+// Zehntausende davon enthalten.
+message TrackPoint {
+  google.protobuf.Timestamp t = 1;
+  Position position = 2;
+  optional double sog_kn = 3;
+  optional double cog_deg = 4;
+  optional double altitude_m = 5;
+  // true: Punkt wurde berechnet, nicht gemeldet. Muss in der UI als solcher
+  // dargestellt werden (Prinzip 4).
+  bool is_interpolated = 6;
+  // Verweis auf die zugrunde liegende Beobachtung. Leer bei interpolierten
+  // Punkten.
+  string obs_id = 7;
+}
+
+// Eine Luecke innerhalb eines Tracks. Wird als eigenes Objekt gefuehrt, damit
+// sie darstellbar und auswertbar ist, statt durch eine gerade Linie zwischen
+// zwei weit entfernten Punkten kaschiert zu werden.
+message TrackGap {
+  google.protobuf.Timestamp start = 1;
+  optional google.protobuf.Timestamp end = 2;
+  GapReason reason = 3;
+  // Distanz zwischen letztem und erstem Punkt beidseits der Luecke.
+  optional double distance_m = 4;
+  double duration_s = 5;
+  // true, wenn die Luecke als Detektortreffer AIS_GAP/ADSB_GAP_MIDFLIGHT
+  // gewertet wurde.
+  bool is_flagged = 6;
+  string detail = 7;
+}
+
+// Prognosekorridor nach Signalverlust (Kapitel 8.1). Ergebnis ist ein
+// wachsendes Unsicherheitspolygon, nie ein Punkt.
+message DeadReckoning {
+  // Letzte gesicherte Beobachtung, von der aus gerechnet wird.
+  google.protobuf.Timestamp from_time = 1;
+  Position from_position = 2;
+  optional double from_sog_kn = 3;
+  optional double from_cog_deg = 4;
+  // Zeitpunkt, fuer den der Korridor gilt.
+  google.protobuf.Timestamp as_of = 5;
+  // Unsicherheitsflaeche zum Zeitpunkt as_of.
+  Geometry uncertainty_area = 6;
+  // Angenommene Kursunsicherheit in Grad und Geschwindigkeitsunsicherheit in
+  // Knoten. Machen den Korridor nachvollziehbar.
+  double course_uncertainty_deg = 7;
+  double speed_uncertainty_kn = 8;
+  // Wahrscheinlichkeitsmasse innerhalb der Flaeche, z. B. 0.95.
+  double containment_probability = 9;
+  string model = 10; // "great_circle", "kalman-cv", "kalman-ct"
+}
+
+// Vereinfachte Variante der Spur fuer eine Zoomstufe. Wird vorab materialisiert
+// (Douglas-Peucker), damit nie 50.000 Punkte an den Browser gehen.
+message TrackSimplification {
+  // Toleranz in Metern, mit der vereinfacht wurde.
+  double tolerance_m = 1;
+  // Zoomstufen, fuer die diese Variante gedacht ist.
+  uint32 min_zoom = 2;
+  uint32 max_zoom = 3;
+  repeated TrackPoint points = 4;
+  uint32 point_count = 5;
+}
+
+// Eine Bewegungsspur.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. `observed_at` ist der
+// Zeitpunkt der juengsten enthaltenen Beobachtung.
+message Track {
+  string track_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  EntityRef entity_ref = 10;
+
+  // Abgedeckter Zeitraum. `end` fehlt bei laufenden Tracks.
+  TimeRange time_range = 11;
+
+  // Rohpunkte in Originalaufloesung. Bei Abfragen ueber die API in der Regel
+  // leer; dann liefert `simplifications` die anzeigetaugliche Variante.
+  repeated TrackPoint points = 12;
+  repeated TrackSimplification simplifications = 13;
+
+  uint32 point_count = 14;
+
+  repeated TrackGap gaps = 15;
+
+  // Gesetzt, solange der Track ohne aktuelle Beobachtungen fortgeschrieben
+  // wird.
+  optional DeadReckoning dead_reckoning = 16;
+
+  // Huellrechteck fuer Viewport-Abfragen.
+  optional BoundingBox bbox = 17;
+
+  // Zurueckgelegte Strecke in Metern, ohne interpolierte Abschnitte ueber
+  // Luecken hinweg.
+  optional double distance_m = 18;
+
+  // Quellen, aus denen der Track zusammengesetzt ist. Ein Schiffstrack kann
+  // aus mehreren AIS-Feeds stammen.
+  repeated string source_ids = 19;
+
+  // true, solange weitere Punkte erwartet werden.
+  bool is_open = 20;
+
+  optional google.protobuf.Timestamp last_point_at = 21;
+}

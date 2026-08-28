@@ -1,0 +1,118 @@
+// ARGUS — AOI: Area of Interest. Nutzerbezogenes geografisches
+// Interessengebiet, Bezugsgroesse fuer f_proximity in der Score-Engine.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Bauform des Interessengebiets (Kapitel 3.5).
+enum AoiKind {
+  AOI_KIND_UNSPECIFIED = 0;
+  AOI_KIND_POLYGON = 1;
+  AOI_KIND_CIRCLE = 2;
+  AOI_KIND_CORRIDOR = 3; // Route mit Puffer
+  AOI_KIND_NAMED_ZONE = 4; // EEZ, FIR, Meerenge, Verwaltungsgebiet
+  AOI_KIND_DYNAMIC = 5; // Umkreis einer bewegten Entitaet
+}
+
+// Typ einer vordefinierten benannten Zone.
+enum ZoneType {
+  ZONE_TYPE_UNSPECIFIED = 0;
+  ZONE_TYPE_EEZ = 1;
+  ZONE_TYPE_TERRITORIAL_WATERS = 2;
+  ZONE_TYPE_STRAIT = 3;
+  ZONE_TYPE_PORT_LIMIT = 4;
+  ZONE_TYPE_ANCHORAGE = 5;
+  ZONE_TYPE_FIR = 6; // Fluginformationsgebiet
+  ZONE_TYPE_RESTRICTED_AIRSPACE = 7;
+  ZONE_TYPE_ADMIN_AREA = 8;
+  ZONE_TYPE_SANCTION_ZONE = 9;
+  ZONE_TYPE_CHOKEPOINT = 10;
+}
+
+// Verweis auf eine vordefinierte benannte Zone aus data/aoi-presets.
+message NamedZoneRef {
+  ZoneType zone_type = 1;
+  // Kennung im Referenzdatensatz: "mrgid:5680" (Marine Regions),
+  // "icao_fir:EDGG".
+  string zone_id = 2;
+  string name = 3;
+  // Datensatz, aus dem die Geometrie stammt: "marineregions", "naturalearth".
+  string dataset = 4;
+}
+
+// AOI, das einer bewegten Entitaet folgt (z. B. 50 km um ein Schiff).
+message DynamicAoi {
+  EntityRef anchor = 1;
+  double radius_m = 2;
+  // Aktualisierungsintervall der Geometrie in Sekunden.
+  optional double refresh_s = 3;
+}
+
+// Bewertungsparameter des AOI. Kapitel 7.1 verlangt, dass d0 pro AOI
+// konfigurierbar ist.
+message AoiScoring {
+  // Abklinglaenge d0 in Kilometern fuer f_proximity = exp(-d/d0).
+  double proximity_decay_km = 1;
+  // Multiplikator auf den Gesamtscore fuer Ereignisse in diesem AOI.
+  double weight = 2;
+  // Ereignisse unterhalb dieser Prioritaet werden fuer dieses AOI nicht
+  // gemeldet.
+  optional double min_priority = 3;
+  // Ereignistypen, die fuer dieses AOI ueberhaupt betrachtet werden.
+  // Leer = alle.
+  repeated string event_type_filter = 4;
+}
+
+// Ein Interessengebiet.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. AOIs sind nutzererzeugt;
+// `source` traegt dann "argus:user:<user_id>" und `raw_ref` bleibt leer
+// (bzw. verweist auf die importierte GeoJSON-Datei).
+message Aoi {
+  string aoi_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  string name = 10;
+  string description = 11;
+  AoiKind kind = 12;
+
+  // Aufgeloeste Geometrie. Bei DYNAMIC der zuletzt berechnete Stand, bei
+  // NAMED_ZONE die aus dem Referenzdatensatz uebernommene Flaeche.
+  optional Geometry geometry = 13;
+
+  optional NamedZoneRef named_zone = 14;
+  optional DynamicAoi dynamic = 15;
+
+  // H3-Zellen, die das AOI ueberdecken. Vorberechnet, damit die
+  // Zugehoerigkeitspruefung einer Beobachtung ein Indexlookup ist.
+  repeated string h3_r5_cells = 16;
+  repeated string h3_r7_cells = 17;
+
+  AoiScoring scoring = 18;
+
+  string owner_id = 19;
+  Visibility visibility = 20;
+  // Nutzer- oder Gruppen-IDs mit Zugriff, wenn visibility = TEAM.
+  repeated string shared_with = 21;
+
+  repeated string tags = 22;
+  bool active = 23;
+
+  optional google.protobuf.Timestamp created_at = 24;
+  optional google.protobuf.Timestamp updated_at = 25;
+
+  google.protobuf.Struct attributes = 26;
+
+  // Flaeche in Quadratmetern. Vorberechnet fuer Sortierung und Plausibilitaet.
+  optional double area_m2 = 27;
+}

@@ -1,0 +1,46 @@
+{
+  "obs_id": "01HZX8QK3M4N5P6R7S8T9V0W1X",
+  "schema_version": "1.0.0",
+  "entity_ref": {
+    "type": "ENTITY_TYPE_VESSEL",
+    "id": "imo:9284435",
+    "resolved_entity_id": "01HZW0000VESSEL9284435AAA",
+    "resolution_status": "RESOLUTION_STATUS_RESOLVED",
+    "match_confidence": 0.99
+  },
+  "observed_at": "2026-08-28T09:14:03.221Z",
+  "ingested_at": "2026-08-28T09:14:05.880Z",
+  "source": {
+    "id": "aisstream",
+    "reliability": "SOURCE_RELIABILITY_B",
+    "collector": "ingest-sea@1.0.0",
+    "license_id": "aisstream-tos"
+  },
+  "kind": "OBSERVATION_KIND_POSITION",
+  "geo": {
+    "lat": 25.9412,
+    "lon": 56.2603,
+    "h3_r5": "851f0d4bfffffff",
+    "h3_r7": "871f0d4c2ffffff",
+    "h3_r9": "891f0d4c2c3ffff",
+    "precision": "GEO_PRECISION_EXACT"
+  },
+  "kinematics": {
+    "sog_kn": 11.2,
+    "cog_deg": 118.4,
+    "heading_deg": 121,
+    "draft_m": 12.1
+  },
+  "attributes": {
+    "nav_status": "under_way",
+    "destination": "JEA"
+  },
+  "quality": {
+    "position_accuracy_m": 20,
+    "is_interpolated": false,
+    "time_quality": "TIME_QUALITY_SOURCE_PROVIDED",
+    "seconds_since_previous": 42.5
+  },
+  "raw_ref": "s3://argus-bronze/aisstream/2026/08/28/09/part-0012.jsonl#L4471",
+  "dedupe_key": "aisstream:mmsi:470123456:2026-08-28T09:14:03.221Z"
+}

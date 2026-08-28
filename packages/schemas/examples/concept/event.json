@@ -1,0 +1,115 @@
+{
+  "event_id": "01HZY4T5V6W7X8Y9Z0A1B2C3D4",
+  "schema_version": "1.0.0",
+  "observed_at": "2026-08-28T12:15:31.402Z",
+  "ingested_at": "2026-08-28T12:15:47.019Z",
+  "source": {
+    "id": "reuters-rss",
+    "reliability": "SOURCE_RELIABILITY_A",
+    "credibility": "INFORMATION_CREDIBILITY_1",
+    "collector": "ingest-news@1.0.0",
+    "license_id": "reuters-headline-rss"
+  },
+  "raw_ref": "s3://argus-bronze/reuters-rss/2026/08/28/12/part-0003.jsonl#L88",
+  "type": "economic.rate_decision",
+  "title": "EZB senkt Leitzins um 25 bp",
+  "summary": "Der EZB-Rat hat den Zinssatz fuer die Einlagefazilitaet um 25 Basispunkte gesenkt. Die Entscheidung war von der Mehrheit der befragten Volkswirte erwartet worden.",
+  "lang": "de",
+  "occurred_at": {
+    "start": "2026-08-28T12:15:00Z",
+    "end": null,
+    "precision": "TIME_PRECISION_MINUTE",
+    "is_ongoing": false
+  },
+  "geo": {
+    "geometry": {
+      "point": { "lon": 8.6742, "lat": 50.1092 }
+    },
+    "precision": "GEO_PRECISION_CITY",
+    "place_name": "Frankfurt am Main",
+    "place": {
+      "wikidata_qid": "Q1794",
+      "country_iso3166_1": "DE"
+    },
+    "h3_r7": "871f1d492ffffff"
+  },
+  "entities": [
+    {
+      "ref": {
+        "type": "ENTITY_TYPE_ORGANIZATION",
+        "id": "lei:529900EXAMPLE0000ECB",
+        "resolution_status": "RESOLUTION_STATUS_RESOLVED",
+        "resolved_entity_id": "01HZW0000ORGECB0000000AAA"
+      },
+      "role": "ENTITY_ROLE_ACTOR",
+      "role_confidence": 0.98
+    }
+  ],
+  "magnitude": {
+    "scale": "basis_points",
+    "value": -25,
+    "unit": "bp",
+    "expected_value": -25,
+    "previous_value": 0
+  },
+  "severity": 0.72,
+  "confidence": 0.95,
+  "corroboration": {
+    "independent_sources": 6,
+    "first_seen_source": "reuters",
+    "first_seen_at": "2026-08-28T12:15:31.402Z",
+    "source_ids": ["reuters-rss", "ecb-press", "bloomberg-rss", "faz-rss", "handelsblatt-rss", "afp-rss"],
+    "contradicting_sources": 0
+  },
+  "reports": ["01HZY4T5V6REPORT0000000001", "01HZY4T5V6REPORT0000000002"],
+  "story_cluster_id": "01HZY4T5V6CLUSTER000000001",
+  "scores": {
+    "priority": 88.4,
+    "explanation": [
+      {
+        "factor": "watchlist",
+        "raw": 1.0,
+        "weight": 0.25,
+        "contribution": 0.25,
+        "detail": "Treffer: Watchlist 'Zentralbanken' -> lei:529900EXAMPLE0000ECB"
+      },
+      {
+        "factor": "proximity",
+        "raw": 0.87,
+        "weight": 0.2,
+        "contribution": 0.174,
+        "detail": "12 km vom AOI 'Rhein-Main'"
+      },
+      {
+        "factor": "corroboration",
+        "raw": 0.857,
+        "weight": 0.15,
+        "contribution": 0.129,
+        "detail": "6 unabhaengige Quellen"
+      },
+      {
+        "factor": "recency",
+        "raw": 0.99,
+        "weight": 0.15,
+        "contribution": 0.149,
+        "detail": "16 s alt, tau = 30 min (Domaene Markt)"
+      }
+    ],
+    "weights_version": "weights-default-2026.3",
+    "profile_id": "",
+    "computed_at": "2026-08-28T12:15:47.630Z"
+  },
+  "status": "EVENT_STATUS_CONFIRMED",
+  "version": 1,
+  "versions": [
+    {
+      "v": 1,
+      "at": "2026-08-28T12:15:47.019Z",
+      "changed": ["severity"],
+      "author": "argus:service:scorer",
+      "reason": "Erstbewertung"
+    }
+  ],
+  "tags": ["monetary-policy", "eurozone"],
+  "dedupe_key": "ecb:rate_decision:2026-08-28T12:15:00Z"
+}

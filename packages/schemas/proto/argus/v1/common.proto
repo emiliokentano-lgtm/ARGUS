@@ -1,0 +1,583 @@
+// ARGUS — geteilte Basistypen.
+//
+// Alles in dieser Datei wird von mehreren Kernobjekten benutzt. Regel: Ein Typ
+// gehoert nur dann hierher, wenn ihn mindestens zwei Kernobjekte verwenden.
+//
+// RECORD-HEADER-KONVENTION
+// -----------------------
+// Jedes Top-Level-Objekt (Observation, Event, Entity, ...) belegt die
+// Feldnummern 1-6 mit demselben Header und in derselben Reihenfolge:
+//
+//   1  <objekt>_id   string                      ULID, monoton sortierbar
+//   2  schema_version string                     SemVer des Schema-Bundles
+//   3  observed_at    optional Timestamp          Valid Time (Quelle)
+//   4  ingested_at    Timestamp                   Transaction Time (System)
+//   5  source         Provenance                  Herkunft
+//   6  raw_ref        string                      Zeiger ins Bronze-Archiv
+//   7-9                                           reserviert fuer Header-Erweiterung
+//   10+ objektspezifisch
+//
+// Damit ist der Header ueber alle Objekte hinweg an derselben Stelle lesbar,
+// ohne eine gemeinsame Submessage zu erzwingen (die die JSON-Form der in
+// Kapitel 3.2 des Konzepts festgelegten Payloads gebrochen haette).
+//
+// ZEIT: Alle Zeitstempel sind google.protobuf.Timestamp in UTC. Es gibt kein
+// Feld, das eine lokale Zeit transportiert.
+syntax = "proto3";
+
+package argus.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// ---------------------------------------------------------------------------
+// Provenienz und Quellenbewertung (Admiralty, Kapitel 7.2)
+// ---------------------------------------------------------------------------
+
+// Zuverlaessigkeit der Quelle. NATO-Admiralty-Code, erste Dimension.
+enum SourceReliability {
+  SOURCE_RELIABILITY_UNSPECIFIED = 0;
+  SOURCE_RELIABILITY_A = 1; // zuverlaessig
+  SOURCE_RELIABILITY_B = 2; // meist zuverlaessig
+  SOURCE_RELIABILITY_C = 3; // ziemlich zuverlaessig
+  SOURCE_RELIABILITY_D = 4; // meist unzuverlaessig
+  SOURCE_RELIABILITY_E = 5; // unzuverlaessig
+  SOURCE_RELIABILITY_F = 6; // nicht beurteilbar
+}
+
+// Glaubwuerdigkeit der Einzelinformation. Admiralty-Code, zweite Dimension.
+// Bewusst getrennt von SourceReliability: eine A-Quelle kann eine 4-Meldung
+// weitergeben.
+enum InformationCredibility {
+  INFORMATION_CREDIBILITY_UNSPECIFIED = 0;
+  INFORMATION_CREDIBILITY_1 = 1; // bestaetigt
+  INFORMATION_CREDIBILITY_2 = 2; // wahrscheinlich wahr
+  INFORMATION_CREDIBILITY_3 = 3; // moeglicherweise wahr
+  INFORMATION_CREDIBILITY_4 = 4; // zweifelhaft
+  INFORMATION_CREDIBILITY_5 = 5; // unwahrscheinlich
+  INFORMATION_CREDIBILITY_6 = 6; // nicht beurteilbar
+}
+
+// Herkunft einer einzelnen Nachricht. Wird als Feld `source` in jedem
+// Top-Level-Objekt gefuehrt. Das vollstaendige Quellenprofil steht in
+// argus.v1.Source und wird ueber `id` referenziert.
+message Provenance {
+  // Stabile Quellen-ID aus der source-registry, z. B. "aisstream", "gdelt".
+  // Fuer im System selbst erzeugte Objekte (AOI, Case, Annotation) gilt die
+  // Konvention "argus:user:<user_id>" bzw. "argus:service:<service>".
+  string id = 1;
+
+  SourceReliability reliability = 2;
+
+  // Bewertung dieser konkreten Meldung, nicht der Quelle. Optional, weil sie
+  // haeufig erst nach Korroboration vergeben wird.
+  InformationCredibility credibility = 3;
+
+  // Konkreter Konnektor/Prozess, der die Nachricht geholt hat, inkl. Version:
+  // "ingest-sea@1.4.2". Trennt Quellenfehler von Konnektorfehlern.
+  string collector = 4;
+
+  // Verweis in das Lizenzregister (Kapitel 14). CI verweigert Builds mit
+  // Quellen ohne Lizenzeintrag.
+  string license_id = 5;
+
+  // Zeitpunkt des Abrufs bei der Quelle. Unterscheidet sich von ingested_at,
+  // wenn zwischen Abruf und Verarbeitung gepuffert wurde (Batch, Backfill).
+  optional google.protobuf.Timestamp retrieved_at = 6;
+
+  // Gemessener Versatz zwischen Quellenuhr und Systemuhr in Millisekunden.
+  // Positiv: Quelle geht vor. Grundlage fuer die Uhrendrift-Ueberwachung.
+  optional int32 clock_skew_ms = 7;
+}
+
+// ---------------------------------------------------------------------------
+// Zeit
+// ---------------------------------------------------------------------------
+
+// Genauigkeit einer Zeitangabe. Verhindert, dass "irgendwann am 12.03." als
+// sekundengenau dargestellt wird.
+enum TimePrecision {
+  TIME_PRECISION_UNSPECIFIED = 0;
+  TIME_PRECISION_SECOND = 1;
+  TIME_PRECISION_MINUTE = 2;
+  TIME_PRECISION_HOUR = 3;
+  TIME_PRECISION_DAY = 4;
+  TIME_PRECISION_MONTH = 5;
+  TIME_PRECISION_YEAR = 6;
+  // Zeitpunkt nicht bestimmbar, obwohl das Ereignis stattgefunden hat.
+  TIME_PRECISION_UNKNOWN = 7;
+}
+
+// Woher stammt der Zeitstempel eines Datensatzes. Wird gebraucht, weil das
+// Fehlen von observed_at ein legitimer, haeufiger Zustand ist.
+enum TimeQuality {
+  TIME_QUALITY_UNSPECIFIED = 0;
+  // Quelle hat einen Zeitstempel geliefert.
+  TIME_QUALITY_SOURCE_PROVIDED = 1;
+  // Quelle liefert nur grobe Zeit (z. B. tagesgenau).
+  TIME_QUALITY_SOURCE_PROVIDED_COARSE = 2;
+  // Kein Quellzeitstempel; Konsumenten muessen ingested_at benutzen und
+  // duerfen die Zeit nicht als Messzeitpunkt darstellen.
+  TIME_QUALITY_INFERRED_FROM_INGEST = 3;
+  // Quelle liefert einen Zeitstempel, der als unplausibel erkannt wurde
+  // (Zukunft, Epoche 0, Sprung gegen die Uhr).
+  TIME_QUALITY_IMPLAUSIBLE = 4;
+  // Es gibt keinen Zeitstempel und auch kein sinnvolles Surrogat.
+  TIME_QUALITY_MISSING = 5;
+}
+
+// Zeitspanne mit expliziter Genauigkeit. `end` ist optional: ein laufendes
+// Ereignis hat kein Ende, und "unbekanntes Ende" darf nicht als "Ende = jetzt"
+// erscheinen.
+message TimeRange {
+  google.protobuf.Timestamp start = 1;
+  optional google.protobuf.Timestamp end = 2;
+  TimePrecision precision = 3;
+  // true: Ereignis dauert zum Stand `as_of` noch an. Unterscheidet
+  // "laeuft noch" von "Ende unbekannt".
+  bool is_ongoing = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Geografie (Kapitel 3.5)
+// ---------------------------------------------------------------------------
+
+// Wie genau ist eine Ortsangabe. Kernregel des Konzepts: eine Laenderangabe
+// wird nie unmarkiert als Punkt dargestellt.
+enum GeoPrecision {
+  GEO_PRECISION_UNSPECIFIED = 0;
+  GEO_PRECISION_EXACT = 1; // Sensorposition, Koordinate aus der Quelle
+  GEO_PRECISION_BUILDING = 2;
+  GEO_PRECISION_CITY = 3;
+  GEO_PRECISION_ADMIN1 = 4; // Bundesland/Provinz
+  GEO_PRECISION_COUNTRY = 5;
+  GEO_PRECISION_MARITIME_ZONE = 6; // EEZ, Meerenge, FIR, Seegebiet
+  // Explizit als unbekannt bewertet. Nicht mit UNSPECIFIED verwechseln:
+  // UNSPECIFIED heisst "nicht gesetzt", UNKNOWN heisst "geprueft, unbekannt".
+  GEO_PRECISION_UNKNOWN = 7;
+}
+
+// Einzelne Koordinate. Feldnamen statt Array-Reihenfolge, damit die
+// lon/lat-Verwechslung strukturell ausgeschlossen ist.
+message Position {
+  double lon = 1;
+  double lat = 2;
+  optional double altitude_m = 3; // ueber WGS84-Ellipsoid
+}
+
+// Offener Linienzug.
+message LineString {
+  repeated Position positions = 1;
+}
+
+// Geschlossener Ring. Erster und letzter Punkt sind identisch.
+message LinearRing {
+  repeated Position positions = 1;
+}
+
+// Flaeche mit optionalen Loechern.
+message Polygon {
+  // rings[0] ist die Aussengrenze, alle weiteren sind Loecher (GeoJSON-Regel).
+  repeated LinearRing rings = 1;
+}
+
+// Mehrere zusammengehoerige Flaechen, z. B. ein Inselstaat.
+message MultiPolygon {
+  repeated Polygon polygons = 1;
+}
+
+// Achsenparalleles Huellrechteck. Fuer Viewport-Abfragen und Vorfilterung.
+message BoundingBox {
+  double west = 1;
+  double south = 2;
+  double east = 3;
+  double north = 4;
+}
+
+// Kreis um einen Mittelpunkt. Als eigener Typ statt als angenaehertes
+// Polygon, damit der Radius exakt erhalten bleibt.
+message Circle {
+  Position center = 1;
+  double radius_m = 2;
+}
+
+// Linie mit Puffer. Der Korridor-AOI-Typ aus Kapitel 3.5.
+message Corridor {
+  LineString path = 1;
+  double buffer_m = 2;
+}
+
+// Geometrie in WGS84. Bewusst typisiert statt als GeoJSON-Struct: Geometrien
+// sind Kernfelder, und ein freies Struct verschiebt jede Validierung in die
+// Laufzeit.
+message Geometry {
+  oneof shape {
+    Position point = 1;
+    LineString line = 2;
+    Polygon polygon = 3;
+    MultiPolygon multi_polygon = 4;
+    BoundingBox bbox = 5;
+    Circle circle = 6;
+    Corridor corridor = 7;
+  }
+}
+
+// Verweis in einen Gazetteer. Erlaubt, einen Ort zu benennen, ohne ihm eine
+// Geometrie zu unterstellen.
+message PlaceRef {
+  optional string wikidata_qid = 1; // "Q1794"
+  optional string geonames_id = 2;
+  optional string osm_id = 3; // "relation/62400"
+  optional string name = 4;
+  optional string country_iso3166_1 = 5; // Alpha-2
+  optional string admin1_code = 6;
+}
+
+// Punktbeobachtung mit vorberechneten H3-Indizes. Die drei Aufloesungen sind
+// die aus Kapitel 3.5: r5 Region, r7 Ereignis-Bucket, r9 Feinabgleich.
+// Denormalisiert, weil sie in jeder Viewport- und Nachbarschaftsabfrage
+// gebraucht werden.
+message GeoPoint {
+  double lat = 1;
+  double lon = 2;
+  optional double altitude_m = 3;
+  string h3_r5 = 4;
+  string h3_r7 = 5;
+  string h3_r9 = 6;
+  // Muss von der Ingest-Pipeline gesetzt werden. UNSPECIFIED gilt als
+  // Datenqualitaetsfehler und wird im Source-Health-Panel gezaehlt.
+  GeoPrecision precision = 7;
+}
+
+// Ortsangabe eines Ereignisses. Deckt den Fehlerfall "nur Landangabe" ab:
+// geometry fehlt, precision = COUNTRY, place traegt die Landeskennung.
+message GeoLocation {
+  // Fehlt, wenn nur ein benannter Ort ohne Geometrie bekannt ist.
+  optional Geometry geometry = 1;
+  GeoPrecision precision = 2;
+  // Menschenlesbarer Ortsname, wie er in der UI erscheint.
+  string place_name = 3;
+  optional PlaceRef place = 4;
+  // Aus der Geometrie abgeleiteter Darstellungspunkt fuer die Karte.
+  // Nur zusammen mit representative_point_is_derived auszuwerten: ist das
+  // Flag true, ist der Punkt eine Darstellungshilfe und keine Messung.
+  optional Position representative_point = 5;
+  bool representative_point_is_derived = 6;
+  string h3_r5 = 7;
+  string h3_r7 = 8;
+  // Radius in Metern, innerhalb dessen der wahre Ort mit der angegebenen
+  // Konfidenz liegt. Fuer Unsicherheitsdarstellung auf der Karte.
+  optional double uncertainty_radius_m = 9;
+}
+
+// ---------------------------------------------------------------------------
+// Entitaetsverweise (Kapitel 3.3)
+// ---------------------------------------------------------------------------
+
+// Typ einer Entitaet. Geschlossene Liste, weil der Typ ueber Speicherort,
+// Resolver-Strategie und Kartenlayer entscheidet.
+enum EntityType {
+  ENTITY_TYPE_UNSPECIFIED = 0;
+  // Typ wurde geprueft und ist nicht bestimmbar. Getrennt von UNSPECIFIED.
+  ENTITY_TYPE_UNKNOWN = 1;
+  ENTITY_TYPE_VESSEL = 2;
+  ENTITY_TYPE_AIRCRAFT = 3;
+  ENTITY_TYPE_ORGANIZATION = 4;
+  ENTITY_TYPE_PERSON = 5;
+  ENTITY_TYPE_PLACE = 6;
+  ENTITY_TYPE_PORT = 7;
+  ENTITY_TYPE_AIRPORT = 8;
+  ENTITY_TYPE_FACILITY = 9;
+  ENTITY_TYPE_PIPELINE = 10;
+  ENTITY_TYPE_SUBMARINE_CABLE = 11;
+  ENTITY_TYPE_VEHICLE = 12;
+  ENTITY_TYPE_SATELLITE = 13;
+  ENTITY_TYPE_FINANCIAL_INSTRUMENT = 14;
+  ENTITY_TYPE_COMMODITY = 15;
+  ENTITY_TYPE_ADMIN_AREA = 16;
+  ENTITY_TYPE_MARITIME_ZONE = 17;
+  ENTITY_TYPE_AIRSPACE = 18;
+  ENTITY_TYPE_NETWORK_ASSET = 19; // AS, Praefix, Rechenzentrum
+  ENTITY_TYPE_EVENT_SERIES = 20; // wiederkehrender Termin, z. B. EZB-Sitzung
+}
+
+// Zustand der Entitaetsaufloesung. Ein unaufgeloester Verweis bleibt
+// erhalten - er wird nie stillschweigend verworfen oder geraten.
+enum ResolutionStatus {
+  RESOLUTION_STATUS_UNSPECIFIED = 0;
+  // Noch nicht durch den Resolver gelaufen.
+  RESOLUTION_STATUS_PENDING = 1;
+  // Kein Kandidat ueber Schwellwert.
+  RESOLUTION_STATUS_UNRESOLVED = 2;
+  RESOLUTION_STATUS_RESOLVED = 3;
+  // Mehrere Kandidaten oberhalb Schwellwert; in der Review-Queue.
+  RESOLUTION_STATUS_AMBIGUOUS = 4;
+  // Quellen widersprechen sich ueber die Identitaet.
+  RESOLUTION_STATUS_CONFLICTED = 5;
+  // Ziel wurde in eine andere Entitaet zusammengefuehrt.
+  RESOLUTION_STATUS_MERGED = 6;
+}
+
+// Verweis auf eine Entitaet - aufgeloest oder nicht.
+//
+// Der Fehlerfall "unbekannte Entitaet" wird hier abgebildet: `id` haelt den
+// quellnativen Bezeichner ("mmsi:211234560"), `resolved_entity_id` bleibt
+// leer und `resolution_status` erklaert warum. Damit geht die Rohaussage der
+// Quelle nie verloren, auch wenn die Aufloesung scheitert oder spaeter
+// revidiert wird.
+message EntityRef {
+  EntityType type = 1;
+  // Quellnativer Bezeichner mit Schema-Praefix: "imo:9284435", "mmsi:211234560",
+  // "icao24:3c6444", "lei:529900...", "wikidata:Q64". Bei reinem Namensbezug
+  // "name:Ever Given".
+  string id = 2;
+  // Kanonische ULID der aufgeloesten Entitaet. Fehlt, solange nicht aufgeloest.
+  optional string resolved_entity_id = 3;
+  ResolutionStatus resolution_status = 4;
+  // Score des Resolvers fuer diese Zuordnung, 0..1.
+  optional double match_confidence = 5;
+  // Bei AMBIGUOUS: die konkurrierenden Kandidaten, damit die Review-Queue
+  // nicht neu rechnen muss.
+  repeated string candidate_entity_ids = 6;
+}
+
+// Generischer Verweis auf ein beliebiges ARGUS-Objekt. Fuer Faelle, in denen
+// der Zieltyp erst zur Laufzeit feststeht (Case-Inhalte, Belege, Alarmkontext).
+enum ObjectKind {
+  OBJECT_KIND_UNSPECIFIED = 0;
+  OBJECT_KIND_OBSERVATION = 1;
+  OBJECT_KIND_EVENT = 2;
+  OBJECT_KIND_ENTITY = 3;
+  OBJECT_KIND_RELATION = 4;
+  OBJECT_KIND_REPORT = 5;
+  OBJECT_KIND_TRACK = 6;
+  OBJECT_KIND_ASSESSMENT = 7;
+  OBJECT_KIND_SOURCE = 8;
+  OBJECT_KIND_AOI = 9;
+  OBJECT_KIND_WATCHLIST = 10;
+  OBJECT_KIND_ALERT = 11;
+  OBJECT_KIND_CASE = 12;
+}
+
+// Typisierter Verweis auf ein beliebiges ARGUS-Objekt.
+message ObjectRef {
+  ObjectKind kind = 1;
+  string id = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Konfidenz, Belege, Modellherkunft
+// ---------------------------------------------------------------------------
+
+// Woraus die Konfidenz stammt. Eine Modellkonfidenz und eine menschliche
+// Einschaetzung sind nicht dasselbe und duerfen nicht verrechnet werden.
+enum ConfidenceBasis {
+  CONFIDENCE_BASIS_UNSPECIFIED = 0;
+  CONFIDENCE_BASIS_MODEL = 1;
+  CONFIDENCE_BASIS_RULE = 2;
+  CONFIDENCE_BASIS_HUMAN_JUDGEMENT = 3;
+  CONFIDENCE_BASIS_STATISTICAL = 4;
+  CONFIDENCE_BASIS_CORROBORATION = 5;
+}
+
+// Konfidenz mit optionalem Intervall. Ein Punktwert ohne Intervall ist
+// erlaubt, ein Intervall ohne Punktwert nicht.
+message Confidence {
+  double value = 1; // 0..1
+  optional double lower = 2;
+  optional double upper = 3;
+  ConfidenceBasis basis = 4;
+  // Verfahren, das den Wert erzeugt hat: "logreg-v3", "analyst", "bayes-fuse".
+  string method = 5;
+}
+
+// Art des Belegs.
+enum EvidenceKind {
+  EVIDENCE_KIND_UNSPECIFIED = 0;
+  EVIDENCE_KIND_REPORT = 1;
+  EVIDENCE_KIND_OBSERVATION = 2;
+  EVIDENCE_KIND_EVENT = 3;
+  EVIDENCE_KIND_ENTITY = 4;
+  EVIDENCE_KIND_RELATION = 5;
+  EVIDENCE_KIND_TRACK = 6;
+  EVIDENCE_KIND_DETECTOR_HIT = 7;
+  EVIDENCE_KIND_EXTERNAL_DOCUMENT = 8;
+  EVIDENCE_KIND_HUMAN_STATEMENT = 9;
+}
+
+// Ein einzelner Beleg. Traegt die Beweispflicht des KI-Layers (Kapitel 11):
+// jede modellgenerierte Aussage muss auf mindestens einen Evidence-Eintrag
+// mit aufloesbarer `ref` zeigen.
+message Evidence {
+  EvidenceKind kind = 1;
+  // ID des belegenden Objekts im System.
+  string ref = 2;
+  // Woertliches Zitat aus der Quelle, falls der Beleg ein Text ist.
+  optional string quote = 3;
+  optional string url = 4;
+  optional google.protobuf.Timestamp asserted_at = 5;
+  optional Provenance source = 6;
+  // Zeichenoffsets des Zitats im Ursprungstext, fuer Hervorhebung in der UI.
+  optional uint32 char_start = 7;
+  optional uint32 char_end = 8;
+}
+
+// Reproduzierbarkeit modellgenerierter Ausgaben (Kapitel 11). Ohne diesen
+// Block darf kein LLM-Output persistiert werden.
+message ModelProvenance {
+  string model = 1; // "bge-m3", "llama-3.1-70b"
+  string model_version = 2;
+  string prompt_id = 3; // Bezeichner der Prompt-Vorlage
+  string prompt_hash = 4; // Hash der aufgeloesten Prompt-Instanz
+  optional double temperature = 5;
+  google.protobuf.Struct parameters = 6;
+  string run_id = 7;
+  optional google.protobuf.Timestamp generated_at = 8;
+  // Kosten in Mikro-Einheiten der Abrechnungswaehrung, fuer das Kostenpanel.
+  optional int64 cost_micros = 9;
+}
+
+// ---------------------------------------------------------------------------
+// Bewertung und Erklaerbarkeit (Kapitel 7)
+// ---------------------------------------------------------------------------
+
+// Ein Summand der Score-Formel. Kapitel 7.3 verlangt, dass jeder Score in
+// genau diese Bestandteile zerlegbar ist.
+message ScoreFactor {
+  // Faktorname ohne Praefix: "severity", "proximity", "recency",
+  // "reliability", "corroboration", "novelty", "watchlist", "exposure",
+  // "velocity".
+  string factor = 1;
+  double raw = 2; // Rohwert des Faktors, 0..1
+  double weight = 3; // angewandtes Gewicht w_i
+  double contribution = 4; // raw * weight
+  // Menschenlesbare Begruendung fuer das Wasserfalldiagramm.
+  string detail = 5;
+}
+
+// Prioritaetsbewertung mit vollstaendiger Zerlegung (Kapitel 7).
+// Ein Score ohne explanation ist ungueltig.
+message Score {
+  double priority = 1; // 0..100
+  repeated ScoreFactor explanation = 2;
+  // Version des Gewichtssatzes, mit dem gerechnet wurde. Ohne sie ist ein
+  // historischer Score nicht reproduzierbar.
+  string weights_version = 3;
+  // Nutzer/Rolle, fuer die dieser Score gilt. Leer = Systemstandard.
+  string profile_id = 4;
+  optional google.protobuf.Timestamp computed_at = 5;
+}
+
+// Grad der Bestaetigung durch unabhaengige Quellen. Direkter Input fuer
+// f_corroboration.
+message Corroboration {
+  uint32 independent_sources = 1;
+  string first_seen_source = 2;
+  optional google.protobuf.Timestamp first_seen_at = 3;
+  repeated string source_ids = 4;
+  // Quellen, die aktiv widersprechen. Ein hoher Wert senkt die Konfidenz,
+  // statt nur die Bestaetigung nicht zu erhoehen.
+  uint32 contradicting_sources = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Korrektur, Widerspruch, Versionierung
+// ---------------------------------------------------------------------------
+
+// Fehlerfall "zurueckgezogene Meldung". Der Datensatz wird nicht geloescht,
+// sondern als zurueckgezogen markiert (Prinzip 6: Ereignisse sind
+// unveraenderlich).
+message Retraction {
+  google.protobuf.Timestamp retracted_at = 1;
+  // Quelle, die den Rueckzug erklaert hat. Kann eine andere sein als die
+  // urspruengliche Quelle.
+  string retracted_by_source = 2;
+  string reason = 3;
+  // Nachfolgeobjekt, falls die Meldung ersetzt statt nur zurueckgezogen wurde.
+  optional string superseded_by_id = 4;
+  // true, wenn der Rueckzug von ARGUS selbst ausgeloest wurde (z. B. durch
+  // widerlegende Korroboration), nicht von der Quelle.
+  bool inferred_by_system = 5;
+}
+
+// Eine konkurrierende Behauptung zu einem Feld.
+message ContradictingClaim {
+  // Behaupteter Wert, als google.protobuf.Value, damit jeder JSON-Typ
+  // abbildbar ist.
+  google.protobuf.Value value = 1;
+  Provenance source = 2;
+  optional google.protobuf.Timestamp asserted_at = 3;
+  optional double confidence = 4;
+  repeated Evidence evidence = 5;
+}
+
+// Fehlerfall "widerspruechliche Meldungen zum selben Sachverhalt".
+// Der Widerspruch wird als Datum gefuehrt, nicht durch Auswahl eines Siegers
+// aufgeloest. Die UI zeigt beide Seiten.
+message Contradiction {
+  // Pfad des strittigen Feldes im Zielobjekt, JSON-Pointer-artig:
+  // "/severity", "/geo/place_name", "/entities/0/ref".
+  string field_path = 1;
+  repeated ContradictingClaim claims = 2;
+  // Vom System oder einem Analysten bevorzugte Variante (Index in `claims`).
+  // Fehlt, solange der Widerspruch offen ist.
+  optional uint32 preferred_claim_index = 3;
+  string note = 4;
+  optional google.protobuf.Timestamp detected_at = 5;
+}
+
+// Ein Eintrag in der Versionskette eines Objekts. Korrekturen erzeugen neue
+// Versionen; nichts wird ueberschrieben.
+message VersionInfo {
+  uint32 v = 1;
+  google.protobuf.Timestamp at = 2;
+  // Geaenderte Feldpfade dieser Version.
+  repeated string changed = 3;
+  // Urheber: "argus:service:scorer", "user:01HZ...".
+  string author = 4;
+  string reason = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Datenluecken (Prinzip 4: Graceful Degradation)
+// ---------------------------------------------------------------------------
+
+// Ursache einer Datenluecke. Trennt Ausfaelle von fehlender Abdeckung -
+// beides sieht in der Karte gleich leer aus, bedeutet aber Gegenteiliges.
+enum GapReason {
+  GAP_REASON_UNSPECIFIED = 0;
+  GAP_REASON_SOURCE_UNAVAILABLE = 1; // Quelle nicht erreichbar
+  GAP_REASON_RATE_LIMITED = 2;
+  GAP_REASON_NO_COVERAGE = 3; // Gebiet ausserhalb der Abdeckung
+  GAP_REASON_SIGNAL_LOSS = 4; // Sender aus oder ausser Reichweite
+  GAP_REASON_FILTERED = 5; // bewusst nicht eingesammelt
+  GAP_REASON_LICENSE_RESTRICTED = 6;
+  GAP_REASON_PIPELINE_FAILURE = 7; // Fehler in ARGUS selbst
+  GAP_REASON_UNKNOWN = 8;
+}
+
+// Eine bekannte Luecke im Datenbestand. Wird ausdruecklich transportiert und
+// dargestellt, statt durch Interpolation kaschiert zu werden.
+message DataGap {
+  google.protobuf.Timestamp start = 1;
+  // Fehlt, solange die Luecke andauert.
+  optional google.protobuf.Timestamp end = 2;
+  GapReason reason = 3;
+  string detail = 4;
+  string source_id = 5;
+  // Betroffener Ausschnitt, falls die Luecke raeumlich begrenzt ist.
+  optional Geometry area = 6;
+}
+
+// ---------------------------------------------------------------------------
+// Sichtbarkeit (fuer nutzererzeugte Objekte)
+// ---------------------------------------------------------------------------
+
+// Sichtbarkeit nutzererzeugter Objekte.
+enum Visibility {
+  VISIBILITY_UNSPECIFIED = 0;
+  VISIBILITY_PRIVATE = 1;
+  VISIBILITY_TEAM = 2;
+  VISIBILITY_ORG = 3;
+  VISIBILITY_PUBLIC = 4;
+}

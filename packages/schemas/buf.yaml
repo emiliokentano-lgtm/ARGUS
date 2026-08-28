@@ -1,0 +1,27 @@
+# ARGUS Schema-Modul. Einzige Wahrheitsquelle fuer Datenstrukturen
+# (Repository-Regel aus Kapitel 16 des Konzepts).
+version: v2
+
+modules:
+  - path: proto
+
+lint:
+  use:
+    - STANDARD
+    - COMMENT_MESSAGE
+    - COMMENT_ENUM
+  # COMMENT_MESSAGE/COMMENT_ENUM zusaetzlich zu STANDARD: ein Schema ohne
+  # Kommentar ist fuer den naechsten Konnektor-Autor wertlos. Feld- und
+  # Enum-Wert-Kommentare bleiben empfohlen, aber nicht erzwungen.
+  except:
+    - COMMENT_ENUM_VALUE
+    - COMMENT_FIELD
+  enum_zero_value_suffix: _UNSPECIFIED
+  service_suffix: Service
+
+breaking:
+  use:
+    - FILE
+    - PACKAGE
+  # Kommentaraenderungen sind keine Bruecke.
+  ignore_unstable_packages: false

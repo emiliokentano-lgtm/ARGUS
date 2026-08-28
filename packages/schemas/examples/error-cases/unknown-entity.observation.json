@@ -1,0 +1,20 @@
+{
+  "_case": "Unbekannte Entitaet: die Quelle meldet eine MMSI, zu der keine Entitaet gefunden wurde. Der Rohbezug bleibt in entity_ref.id erhalten, resolved_entity_id fehlt, resolution_status begruendet es. Die Beobachtung wird gespeichert und ist spaeter nachtraeglich aufloesbar.",
+  "obs_id": "01HZX8QK3M4N5P6R7S8T9V0W20",
+  "schema_version": "1.0.0",
+  "entity_ref": {
+    "type": "ENTITY_TYPE_VESSEL",
+    "id": "mmsi:970010101",
+    "resolution_status": "RESOLUTION_STATUS_UNRESOLVED",
+    "match_confidence": 0.31,
+    "candidate_entity_ids": []
+  },
+  "observed_at": "2026-08-28T09:20:11.000Z",
+  "ingested_at": "2026-08-28T09:20:12.640Z",
+  "source": { "id": "aisstream", "reliability": "SOURCE_RELIABILITY_B" },
+  "kind": "OBSERVATION_KIND_POSITION",
+  "geo": { "lat": 26.5501, "lon": 56.2481, "h3_r7": "871f0d4c0ffffff", "precision": "GEO_PRECISION_EXACT" },
+  "quality": { "time_quality": "TIME_QUALITY_SOURCE_PROVIDED", "flags": ["unknown_mmsi_block"] },
+  "raw_ref": "s3://argus-bronze/aisstream/2026/08/28/09/part-0031.jsonl#L901",
+  "dedupe_key": "aisstream:mmsi:970010101:2026-08-28T09:20:11.000Z"
+}

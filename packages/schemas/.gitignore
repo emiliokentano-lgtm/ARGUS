@@ -1,0 +1,13 @@
+# Generierte Artefakte. Die Protos sind die Wahrheitsquelle; alles unter gen/
+# entsteht aus ihnen und wird bewusst nicht eingecheckt, damit es nie von den
+# Protos abweichen kann.
+/gen/
+/build/
+
+# Werkzeuge
+/node_modules/
+/.venv/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/

@@ -1,0 +1,60 @@
+{
+  "_case": "Widerspruechliche Meldungen zum selben Sachverhalt: zwei Quellen behaupten unterschiedliche Opferzahlen. Der Widerspruch wird als Datum gefuehrt (contradictions), nicht durch Auswahl eines Siegers aufgeloest. status = DISPUTED, und die Konfidenz ist entsprechend niedrig.",
+  "event_id": "01HZY4T5V6W7X8Y9Z0A1B2C3D6",
+  "schema_version": "1.0.0",
+  "observed_at": "2026-08-28T14:41:00.000Z",
+  "ingested_at": "2026-08-28T14:41:20.000Z",
+  "source": { "id": "reliefweb", "reliability": "SOURCE_RELIABILITY_B" },
+  "raw_ref": "s3://argus-bronze/reliefweb/2026/08/28/14/part-0001.jsonl#L7",
+  "type": "conflict.explosion",
+  "title": "Explosion an Umschlaganlage",
+  "summary": "Berichte ueber eine Explosion an einer Umschlaganlage. Die Angaben zur Zahl der Betroffenen gehen auseinander.",
+  "lang": "de",
+  "occurred_at": {
+    "start": "2026-08-28T14:05:00Z",
+    "end": "2026-08-28T14:12:00Z",
+    "precision": "TIME_PRECISION_MINUTE"
+  },
+  "geo": {
+    "geometry": { "circle": { "center": { "lon": 4.4013, "lat": 51.9244 }, "radius_m": 800 } },
+    "precision": "GEO_PRECISION_CITY",
+    "place_name": "Rotterdam"
+  },
+  "severity": 0.61,
+  "confidence": 0.48,
+  "corroboration": {
+    "independent_sources": 3,
+    "first_seen_source": "reliefweb",
+    "contradicting_sources": 2
+  },
+  "status": "EVENT_STATUS_DISPUTED",
+  "contradictions": [
+    {
+      "field_path": "/magnitude/value",
+      "claims": [
+        {
+          "value": 4,
+          "source": { "id": "reliefweb", "reliability": "SOURCE_RELIABILITY_B" },
+          "asserted_at": "2026-08-28T14:41:00Z",
+          "confidence": 0.7,
+          "evidence": [
+            { "kind": "EVIDENCE_KIND_REPORT", "ref": "01HZY4T5V6REPORT0000000021", "quote": "vier Verletzte" }
+          ]
+        },
+        {
+          "value": 11,
+          "source": { "id": "local-news-nl", "reliability": "SOURCE_RELIABILITY_D" },
+          "asserted_at": "2026-08-28T14:52:00Z",
+          "confidence": 0.35,
+          "evidence": [
+            { "kind": "EVIDENCE_KIND_REPORT", "ref": "01HZY4T5V6REPORT0000000022", "quote": "elf Verletzte" }
+          ]
+        }
+      ],
+      "note": "Behoerdliche Bestaetigung steht aus.",
+      "detected_at": "2026-08-28T14:53:10Z"
+    }
+  ],
+  "reports": ["01HZY4T5V6REPORT0000000021", "01HZY4T5V6REPORT0000000022"],
+  "dedupe_key": "reliefweb:explosion:rotterdam:2026-08-28T14:05:00Z"
+}

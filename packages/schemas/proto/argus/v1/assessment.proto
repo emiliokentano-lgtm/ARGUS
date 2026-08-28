@@ -1,0 +1,148 @@
+// ARGUS — Assessment: eine bewertende Aussage mit Konfidenz und Urheber.
+// Trennt Bewertung strikt von Beobachtung: was ARGUS gemessen hat, steht in
+// Observation; was jemand daraus schliesst, steht hier.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Art der bewertenden Aussage. Steuert, welche Pflichtfelder gelten:
+// Prognosen brauchen validity, Korrelationen brauchen correlation.
+enum AssessmentKind {
+  ASSESSMENT_KIND_UNSPECIFIED = 0;
+  ASSESSMENT_KIND_HYPOTHESIS = 1; // Vermutung, ausdruecklich unbelegt
+  ASSESSMENT_KIND_JUDGEMENT = 2; // begruendete Einschaetzung
+  ASSESSMENT_KIND_FORECAST = 3; // Aussage ueber die Zukunft
+  ASSESSMENT_KIND_CLASSIFICATION = 4; // Zuordnung zu einer Kategorie
+  ASSESSMENT_KIND_CORRELATION = 5; // Korrelationshypothese (Kapitel 6.4)
+  ASSESSMENT_KIND_RISK = 6;
+  ASSESSMENT_KIND_ATTRIBUTION = 7; // Zuschreibung an einen Akteur
+}
+
+// Urheberklasse einer Bewertung. Maschinelle und menschliche Aussagen
+// werden nie vermischt dargestellt.
+enum AuthorType {
+  AUTHOR_TYPE_UNSPECIFIED = 0;
+  AUTHOR_TYPE_HUMAN = 1;
+  AUTHOR_TYPE_MODEL = 2; // LLM oder Klassifikator
+  AUTHOR_TYPE_RULE = 3; // Regel-Engine
+  AUTHOR_TYPE_DETECTOR = 4; // Anomaliedetektor
+  AUTHOR_TYPE_EXTERNAL = 5; // uebernommen von einer externen Stelle
+}
+
+// Urheber einer Bewertung.
+message AssessmentAuthor {
+  AuthorType type = 1;
+  // "user:01HZ...", "detector:AIS_GAP", "rule:tanker-dark-hormuz",
+  // "model:summarizer-v3".
+  string id = 2;
+  string display_name = 3;
+  // Pflicht, wenn type = MODEL. Ohne diesen Block ist die Aussage nicht
+  // reproduzierbar und wird von der Persistenzschicht abgelehnt.
+  optional ModelProvenance model = 4;
+}
+
+// Ergebnis der Korrelations-Engine. Kein Kausalbefund, sondern eine Hypothese
+// mit Staerke (Kapitel 6.4).
+message CorrelationHypothesis {
+  // "spatiotemporal", "shared_entity", "statistical_lead_lag".
+  string method = 1;
+  repeated ObjectRef objects = 2;
+  double strength = 3; // 0..1
+  // Zeitlicher Versatz zwischen den korrelierten Objekten in Sekunden.
+  optional double lag_s = 4;
+  optional double distance_m = 5;
+  // Signifikanz, falls statistisch bestimmt.
+  optional double p_value = 6;
+  // Zahl der Vergleiche, gegen die getestet wurde. Ohne sie ist ein p-Wert
+  // bei tausenden parallelen Tests wertlos.
+  optional uint32 comparisons = 7;
+}
+
+// Eine Bewertung.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. `observed_at` ist der
+// Zeitpunkt, auf den sich die Aussage bezieht; `ingested_at` der Zeitpunkt der
+// Speicherung.
+message Assessment {
+  string assessment_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  AssessmentKind kind = 10;
+
+  // Bewertetes Objekt.
+  ObjectRef subject = 11;
+  // Weitere betroffene Objekte, falls die Aussage mehrere verbindet.
+  repeated ObjectRef related = 12;
+
+  // Die Aussage selbst, als Satz:
+  // "Wahrscheinlich Sanktionsumgehung durch STS-Transfer".
+  string statement = 13;
+
+  // Begruendung im Fliesstext. Getrennt von statement, damit Listen die
+  // Kurzform zeigen koennen.
+  string rationale = 14;
+
+  Confidence confidence = 15;
+
+  AssessmentAuthor author = 16;
+
+  // Belege. Fuer maschinell erzeugte Assessments Pflicht: eine Aussage ohne
+  // Beleg wird verworfen (Kapitel 11).
+  repeated Evidence evidence = 17;
+
+  // Zeitraum, fuer den die Aussage gilt. Bei Prognosen der Prognosehorizont.
+  optional TimeRange validity = 18;
+
+  optional CorrelationHypothesis correlation = 19;
+
+  // Nachfolgebewertung, wenn diese ueberholt ist. Bewertungen werden nicht
+  // geaendert, sondern ersetzt.
+  optional string superseded_by = 20;
+  optional string supersedes = 21;
+
+  // Widerspruch durch eine andere Bewertung. Konkurrierende Einschaetzungen
+  // sind erwuenscht und werden nebeneinander gefuehrt.
+  repeated string disputed_by = 22;
+
+  // Ergebnis der Ueberpruefung, sobald der Sachverhalt entschieden ist.
+  // Grundlage der Trefferquote pro Quelle und pro Modell.
+  optional AssessmentOutcome outcome = 23;
+
+  google.protobuf.Struct attributes = 24;
+  repeated string tags = 25;
+
+  Visibility visibility = 26;
+}
+
+// Ergebnis der nachtraeglichen Ueberpruefung einer Bewertung.
+enum OutcomeVerdict {
+  OUTCOME_VERDICT_UNSPECIFIED = 0;
+  OUTCOME_VERDICT_CONFIRMED = 1;
+  OUTCOME_VERDICT_PARTIALLY_CONFIRMED = 2;
+  OUTCOME_VERDICT_REFUTED = 3;
+  OUTCOME_VERDICT_UNDECIDABLE = 4;
+  OUTCOME_VERDICT_EXPIRED = 5; // Prognosehorizont verstrichen, kein Ergebnis
+}
+
+// Nachtraegliche Ueberpruefung. Ohne sie laesst sich weder die Trefferquote
+// einer Quelle noch die Kalibrierung eines Modells bestimmen.
+message AssessmentOutcome {
+  OutcomeVerdict verdict = 1;
+  google.protobuf.Timestamp decided_at = 2;
+  string decided_by = 3;
+  repeated Evidence evidence = 4;
+  string note = 5;
+  // Abweichung zwischen prognostiziertem und eingetretenem Wert, falls
+  // quantifizierbar. Speist die Kalibrierung.
+  optional double error = 6;
+}

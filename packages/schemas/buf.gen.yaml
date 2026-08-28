@@ -1,0 +1,49 @@
+# Codegenerierung aus den ARGUS-Protos.
+#
+# Ausschliesslich lokale Plugins: die Buf Schema Registry (buf.build) ist aus
+# der Build-Umgebung nicht erreichbar, und ein Schema-Build darf nicht von
+# einem fremden Dienst abhaengen. Alle benoetigten Plugins kommen aus
+# node_modules bzw. dem Python-Venv, beide durch Lockfiles festgenagelt.
+#
+# Erzeugte Artefakte werden NICHT eingecheckt (siehe .gitignore): die Protos
+# sind die einzige Wahrheitsquelle, generierter Code ist ein Build-Ergebnis.
+version: v2
+
+managed:
+  enabled: false
+
+clean: true
+
+plugins:
+  # --- Python -------------------------------------------------------------
+  # protoc-Standardgenerator statt betterproto: nur er bildet
+  # google.protobuf.Struct/Value und die kanonische Protobuf-JSON-Abbildung
+  # verlustfrei ab, was fuer die Round-Trip-Zusicherung Voraussetzung ist.
+  - protoc_builtin: python
+    out: gen/python
+    protoc_path: tools/protoc
+  # Typannotationen fuer mypy/pyright.
+  - protoc_builtin: pyi
+    out: gen/python
+    protoc_path: tools/protoc
+
+  # --- TypeScript ---------------------------------------------------------
+  - local: node_modules/.bin/protoc-gen-ts_proto
+    out: gen/ts
+    opt:
+      - esModuleInterop=true
+      # Feldnamen bleiben snake_case wie im Proto. Haelt die JSON-Form ueber
+      # Python, TypeScript und die REST-API hinweg identisch.
+      - snakeToCamel=false
+      # Timestamp als ISO-8601-String statt Date: entspricht der kanonischen
+      # Protobuf-JSON-Abbildung und vermeidet Zeitzonenfallen im Browser.
+      - useDate=string
+      # 64-Bit-Ganzzahlen als String, wie es die Protobuf-JSON-Abbildung
+      # vorschreibt. Verhindert stillen Praezisionsverlust in JavaScript.
+      - forceLong=string
+      # oneof als diskriminierte Union - erzwingt vollstaendige Fallabdeckung
+      # im Typsystem (z. B. bei Geometry.shape).
+      - oneof=unions
+      - useOptionals=messages
+      - outputServices=false
+      - unrecognizedEnum=false

@@ -1,0 +1,203 @@
+// ARGUS — Source: Herkunft einer Information mit Zuverlaessigkeitsprofil,
+// Lizenz, Betriebsparametern und Gesundheitszustand.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Technische Bauform der Quelle. Bestimmt die Konnektor-Betriebsart.
+enum SourceKind {
+  SOURCE_KIND_UNSPECIFIED = 0;
+  SOURCE_KIND_REST_API = 1;
+  SOURCE_KIND_STREAM = 2; // WebSocket, TCP, SSE
+  SOURCE_KIND_FEED = 3; // RSS/Atom
+  SOURCE_KIND_BATCH_FILE = 4; // periodische Dateien, Dumps
+  SOURCE_KIND_WEBHOOK = 5;
+  SOURCE_KIND_SENSOR = 6; // eigener SDR-Empfaenger
+  SOURCE_KIND_MANUAL = 7; // menschliche Eingabe
+  SOURCE_KIND_DERIVED = 8; // aus anderen Quellen berechnet
+}
+
+// Fachdomaene der Quelle. Eine Quelle kann mehrere bedienen.
+enum SourceDomain {
+  SOURCE_DOMAIN_UNSPECIFIED = 0;
+  SOURCE_DOMAIN_AVIATION = 1;
+  SOURCE_DOMAIN_MARITIME = 2;
+  SOURCE_DOMAIN_NEWS = 3;
+  SOURCE_DOMAIN_ECONOMIC = 4;
+  SOURCE_DOMAIN_CONFLICT = 5;
+  SOURCE_DOMAIN_DISASTER = 6;
+  SOURCE_DOMAIN_CORPORATE = 7;
+  SOURCE_DOMAIN_SANCTIONS = 8;
+  SOURCE_DOMAIN_GEO = 9;
+  SOURCE_DOMAIN_WEATHER = 10;
+  SOURCE_DOMAIN_SPACE = 11;
+  SOURCE_DOMAIN_CYBER = 12;
+  SOURCE_DOMAIN_INFRASTRUCTURE = 13;
+}
+
+// Erlaubte Nutzungsart laut Lizenz. Grundlage des CI-Gates aus Kapitel 14.
+enum LicenseUse {
+  LICENSE_USE_UNSPECIFIED = 0;
+  LICENSE_USE_INTERNAL = 1; // interne Auswertung
+  LICENSE_USE_COMMERCIAL = 2;
+  LICENSE_USE_REDISTRIBUTION = 3; // Weitergabe an Dritte
+  LICENSE_USE_DERIVED_WORKS = 4;
+  LICENSE_USE_PUBLIC_DISPLAY = 5; // Anzeige in oeffentlicher UI
+  LICENSE_USE_TRAINING = 6; // Modelltraining
+}
+
+// Lizenzeintrag. Pflichtangabe: das CI-Gate lehnt Quellen ohne Lizenz ab.
+message License {
+  // Schluessel im Lizenzregister (data/source-registry.yaml).
+  string id = 1;
+  string name = 2;
+  // SPDX-Kennung, falls vorhanden: "CC-BY-4.0", "ODbL-1.0".
+  string spdx_id = 3;
+  string url = 4;
+  repeated LicenseUse allowed_uses = 5;
+  // Pflichttext zur Quellennennung, wortwoertlich anzuzeigen.
+  string attribution_text = 6;
+  // true, wenn die Lizenz die Nennung in der UI verlangt.
+  bool attribution_required = 7;
+  optional google.protobuf.Timestamp expires_at = 8;
+  // Einschraenkungen im Klartext, die sich nicht in allowed_uses abbilden
+  // lassen.
+  string restrictions = 9;
+  // Maximale Aufbewahrungsdauer in Tagen, falls die Lizenz sie begrenzt.
+  optional uint32 max_retention_days = 10;
+}
+
+// Abrufgrenzen der Quelle.
+message RateLimit {
+  uint32 requests = 1;
+  uint32 per_seconds = 2;
+  uint32 burst = 3;
+  // Vertraglich zugesicherte Grenze oder nur beobachtet.
+  bool is_documented = 4;
+  // Hoeflichkeitsverzoegerung zwischen Abrufen derselben Domain.
+  optional uint32 politeness_delay_ms = 5;
+}
+
+// Betriebszustand einer Quelle. Speist das Source-Health-Panel (Kapitel 10.4).
+message SourceHealth {
+  optional google.protobuf.Timestamp last_success_at = 1;
+  optional google.protobuf.Timestamp last_failure_at = 2;
+  string last_error = 3;
+  // Fehlerquote im Beobachtungsfenster, 0..1.
+  double error_rate = 4;
+  optional double p50_latency_ms = 5;
+  optional double p95_latency_ms = 6;
+  // Nachrichten pro Stunde im Beobachtungsfenster.
+  optional double throughput_per_hour = 7;
+  // Erwartetes Volumen, um Einbrueche erkennbar zu machen.
+  optional double expected_throughput_per_hour = 8;
+  // Zustand des Circuit Breakers.
+  CircuitState circuit_state = 9;
+  uint32 consecutive_failures = 10;
+  // Aktuell offene Luecken dieser Quelle.
+  repeated DataGap gaps = 11;
+  // Beobachtungsfenster, auf das sich die Kennzahlen beziehen.
+  optional TimeRange window = 12;
+  // Gemessene Uhrendrift gegen die Systemzeit in Millisekunden.
+  optional int32 clock_skew_ms = 13;
+}
+
+// Zustand des Circuit Breakers eines Konnektors (Kapitel 5.2).
+enum CircuitState {
+  CIRCUIT_STATE_UNSPECIFIED = 0;
+  CIRCUIT_STATE_CLOSED = 1; // normal
+  CIRCUIT_STATE_OPEN = 2; // Abrufe ausgesetzt
+  CIRCUIT_STATE_HALF_OPEN = 3; // Testabruf laeuft
+}
+
+// Historischer Eintrag zur Zuverlaessigkeitsbewertung. Aenderungen an der
+// Bewertung einer Quelle brauchen einen Audit-Trail (Kapitel 7.2).
+message ReliabilityChange {
+  google.protobuf.Timestamp at = 1;
+  SourceReliability from = 2;
+  SourceReliability to = 3;
+  string reason = 4;
+  // "argus:service:scorer" bei automatischer Anpassung.
+  string changed_by = 5;
+  // Belege: zurueckgezogene oder widerlegte Meldungen dieser Quelle.
+  repeated Evidence evidence = 6;
+}
+
+// Abdeckung einer Quelle. Macht auswertbar, ob das Fehlen von Daten ein
+// Ausfall oder schlicht fehlende Abdeckung ist.
+message Coverage {
+  // Raeumliche Abdeckung. Fehlt bei globalen Quellen.
+  optional Geometry area = 1;
+  repeated string countries = 2; // ISO 3166-1 Alpha-2
+  // Historische Tiefe des Archivs.
+  optional TimeRange temporal = 3;
+  repeated string languages = 4; // BCP-47
+  string note = 5;
+}
+
+// Eine Quelle.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. `source` verweist hier
+// auf die Herkunft des Quellenprofils selbst (Registry, manuell gepflegt).
+message Source {
+  string source_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  string name = 10;
+  string publisher = 11;
+  string url = 12;
+  string description = 13;
+
+  SourceKind kind = 14;
+  repeated SourceDomain domains = 15;
+
+  // Aktuelle Bewertung. Verlauf in reliability_history.
+  SourceReliability reliability = 16;
+  // Standardbewertung fuer Meldungen dieser Quelle, sofern nicht einzeln
+  // bewertet.
+  InformationCredibility default_credibility = 17;
+  repeated ReliabilityChange reliability_history = 18;
+
+  License license = 19;
+  optional RateLimit rate_limit = 20;
+  Coverage coverage = 21;
+
+  // Erwartete Latenz von Ereignis bis Verfuegbarkeit, in Sekunden. Grundlage
+  // fuer die Alterskennzeichnung in der UI (Kapitel 10.6).
+  optional double expected_latency_s = 22;
+  // Erwartetes Abrufintervall in Sekunden bei Poll-Quellen.
+  optional double poll_interval_s = 23;
+
+  SourceHealth health = 24;
+
+  // Kill-Switch (Kapitel 5.2): Quelle zur Laufzeit einzeln abschaltbar.
+  bool enabled = 25;
+  string disabled_reason = 26;
+
+  // Konnektor, der diese Quelle bedient: "ingest-sea", "ingest-news".
+  string connector_id = 27;
+
+  // Geschaetzte Kosten pro Tag in Mikro-Einheiten der Abrechnungswaehrung.
+  optional int64 cost_per_day_micros = 28;
+
+  // Setzt voraus, dass Zugangsdaten hinterlegt sind. Der Wert selbst steht
+  // nie hier, nur die Referenz auf den Secret-Speicher.
+  string credential_ref = 29;
+
+  google.protobuf.Struct attributes = 30;
+  repeated string tags = 31;
+
+  // true, wenn die Quelle personenbezogene Daten liefern kann.
+  bool may_contain_personal_data = 32;
+  optional uint32 retention_days = 33;
+}

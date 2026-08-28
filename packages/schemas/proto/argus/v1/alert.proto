@@ -1,0 +1,174 @@
+// ARGUS — Alert: ausgeloester Regel- oder Detektortreffer mit Lebenszyklus.
+// Das Schema traegt die Alarmhygiene aus Kapitel 9.2: Throttling,
+// Zusammenfassung, Quittierung, Falsch-Positiv-Rueckmeldung.
+syntax = "proto3";
+
+package argus.v1;
+
+import "argus/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Haertegrad. Neue Detektoren starten immer auf WATCH und werden erst nach
+// gemessener Praezision hochgestuft (Kapitel 8.2).
+enum AlertSeverity {
+  ALERT_SEVERITY_UNSPECIFIED = 0;
+  ALERT_SEVERITY_WATCH = 1; // erscheint nur in der Liste
+  ALERT_SEVERITY_NOTIFY = 2; // Benachrichtigung im Arbeitsfenster
+  ALERT_SEVERITY_ALERT = 3; // aktive Zustellung
+  ALERT_SEVERITY_CRITICAL = 4; // auch ausserhalb der Ruhezeiten
+}
+
+// Lebenszyklus eines Alarms (Kapitel 9.2). Ein Alarm verschwindet nie
+// stillschweigend; er erreicht immer einen Endzustand.
+enum AlertStatus {
+  ALERT_STATUS_UNSPECIFIED = 0;
+  ALERT_STATUS_NEW = 1;
+  ALERT_STATUS_ACKED = 2;
+  ALERT_STATUS_INVESTIGATING = 3;
+  ALERT_STATUS_RESOLVED = 4;
+  ALERT_STATUS_FALSE_POSITIVE = 5;
+  // Durch Throttling unterdrueckt; zaehlt am Sammelalarm mit.
+  ALERT_STATUS_SUPPRESSED = 6;
+  // Automatisch geschlossen, weil die Bedingung nicht mehr gilt.
+  ALERT_STATUS_EXPIRED = 7;
+}
+
+// Zustellzustand einer einzelnen Benachrichtigung. Getrennt vom
+// Alarmstatus: ein bearbeiteter Alarm kann eine fehlgeschlagene Zustellung
+// gehabt haben.
+enum NotificationStatus {
+  NOTIFICATION_STATUS_UNSPECIFIED = 0;
+  NOTIFICATION_STATUS_PENDING = 1;
+  NOTIFICATION_STATUS_SENT = 2;
+  NOTIFICATION_STATUS_FAILED = 3;
+  // Wegen Ruhezeit oder Alarmbudget nicht zugestellt.
+  NOTIFICATION_STATUS_SUPPRESSED = 4;
+  NOTIFICATION_STATUS_BATCHED = 5; // in eine Zusammenfassung aufgenommen
+}
+
+// Ein Zustellversuch ueber einen Kanal.
+message NotificationAttempt {
+  // Kanal in der Form "<typ>:<ziel>": "telegram:watchfloor", "webhook:soc".
+  string channel = 1;
+  NotificationStatus status = 2;
+  optional google.protobuf.Timestamp sent_at = 3;
+  string error = 4;
+  uint32 attempts = 5;
+  // Gesetzt bei BATCHED: ID der Sammelbenachrichtigung.
+  string batch_id = 6;
+}
+
+// Quittierung durch einen Nutzer.
+message AlertAcknowledgement {
+  string user_id = 1;
+  google.protobuf.Timestamp at = 2;
+  string note = 3;
+}
+
+// Abschluss eines Alarms mit Angabe, was tatsaechlich vorlag.
+message AlertResolution {
+  string user_id = 1;
+  google.protobuf.Timestamp at = 2;
+  // Was tatsaechlich vorlag. Fliesst in die Detektormetriken zurueck.
+  ResolutionDisposition disposition = 3;
+  string note = 4;
+  // Case, in den der Vorgang ueberfuehrt wurde.
+  optional string case_id = 5;
+}
+
+// Befund beim Abschluss. Speist die Praezisionsmetrik des Detektors.
+enum ResolutionDisposition {
+  RESOLUTION_DISPOSITION_UNSPECIFIED = 0;
+  RESOLUTION_DISPOSITION_TRUE_POSITIVE = 1;
+  RESOLUTION_DISPOSITION_FALSE_POSITIVE = 2;
+  // Sachverhalt trifft zu, ist aber unerheblich. Wichtig fuer die
+  // Unterscheidung "Detektor falsch" gegen "Schwellwert falsch".
+  RESOLUTION_DISPOSITION_BENIGN = 3;
+  RESOLUTION_DISPOSITION_DUPLICATE = 4;
+  RESOLUTION_DISPOSITION_DATA_QUALITY = 5; // Ursache war ein Datenfehler
+  RESOLUTION_DISPOSITION_UNDETERMINED = 6;
+}
+
+// Erhaltener Kontext zum Ausloesezeitpunkt. Kapitel 9.1 sieht
+// snapshot_context als Alarmaktion vor: die Lage von damals bleibt
+// rekonstruierbar, auch wenn sich die Daten weiterentwickeln.
+message AlertContext {
+  optional double radius_km = 1;
+  optional TimeRange window = 2;
+  repeated ObjectRef objects = 3;
+  // Verweis auf den ausgelagerten Vollkontext im Objektspeicher.
+  string snapshot_ref = 4;
+  optional google.protobuf.Timestamp captured_at = 5;
+}
+
+// Ein Alarm.
+//
+// Header-Konvention: Felder 1-6 wie in common.proto. `observed_at` ist der
+// Zeitpunkt des ausloesenden Sachverhalts, `ingested_at` der Zeitpunkt der
+// Alarmerzeugung. Die Differenz ist die Alarmlatenz aus dem SLO (Kapitel 17).
+message Alert {
+  string alert_id = 1;
+  string schema_version = 2;
+  optional google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp ingested_at = 4;
+  Provenance source = 5;
+  string raw_ref = 6;
+
+  reserved 7 to 9;
+
+  // Ausloesende Regel und deren Version. Ohne Version ist ein alter Alarm
+  // nicht erklaerbar, weil Regeln sich aendern.
+  string rule_id = 10;
+  string rule_version = 11;
+  // Ausloesender Detektor, falls die Regel einen benutzt: "AIS_GAP".
+  string detector_id = 12;
+  string detector_version = 13;
+
+  AlertSeverity severity = 14;
+  AlertStatus status = 15;
+
+  string title = 16;
+  string description = 17;
+
+  // Betroffene Entitaet, falls der Alarm entitaetsbezogen ist.
+  optional EntityRef subject = 18;
+  repeated ObjectRef triggers = 19;
+
+  optional string aoi_id = 20;
+  repeated string watchlist_ids = 21;
+  optional GeoLocation geo = 22;
+
+  Score score = 23;
+  Confidence confidence = 24;
+
+  // Deterministischer Schluessel fuer Throttling und Deduplizierung. Gleicher
+  // Sachverhalt erzeugt denselben Schluessel und damit keinen zweiten Alarm.
+  string dedupe_key = 25;
+  // Wie oft der Sachverhalt seit first_seen_at erneut ausgeloest haette.
+  uint32 occurrence_count = 26;
+  optional google.protobuf.Timestamp first_seen_at = 27;
+  optional google.protobuf.Timestamp last_seen_at = 28;
+  // Alarm, in den dieser eingesammelt wurde (Zusammenfassung bei Alarmfluten).
+  optional string aggregated_into_alert_id = 29;
+
+  string assignee_id = 30;
+  optional AlertAcknowledgement acknowledgement = 31;
+  optional AlertResolution resolution = 32;
+
+  repeated NotificationAttempt notifications = 33;
+  optional AlertContext context = 34;
+
+  // Verweis auf das Runbook fuer diesen Alarmtyp.
+  string runbook_ref = 35;
+
+  google.protobuf.Struct attributes = 36;
+  repeated string tags = 37;
+
+  repeated VersionInfo versions = 38;
+  uint32 version = 39;
+
+  // Zeitpunkt, ab dem der Alarm automatisch auf EXPIRED gesetzt wird, falls
+  // niemand ihn bearbeitet.
+  optional google.protobuf.Timestamp expires_at = 40;
+}
