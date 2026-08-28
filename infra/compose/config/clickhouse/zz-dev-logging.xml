@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!--
+  ARGUS — nur fuer die lokale Entwicklung (ueber docker-compose.override.yml
+  eingebunden). Macht Abfragen zeitnah im query_log sichtbar, damit man beim
+  Entwickeln nicht auf den naechsten Flush wartet.
+-->
+<clickhouse>
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+    </query_log>
+</clickhouse>

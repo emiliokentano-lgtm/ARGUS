@@ -1,0 +1,40 @@
+# ARGUS — Prometheus fuer den Entwicklungs-Stack.
+#
+# Es werden nur Dienste abgefragt, die von sich aus einen Prometheus-Endpunkt
+# anbieten. Postgres, Valkey, OpenSearch und NATS brauchen dafuer eigene
+# Exporter; die kommen mit dem Observability-Ausbau (Prompt 62) hinzu. Bis
+# dahin fehlen sie hier bewusst, statt als dauerhaft rote Ziele zu erscheinen.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: dev
+    stack: argus
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: prometheus
+
+  - job_name: clickhouse
+    # ClickHouse bringt den Endpunkt nativ mit (config.d/zz-argus.xml).
+    static_configs:
+      - targets: ["clickhouse:9363"]
+        labels:
+          service: clickhouse
+
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+        labels:
+          service: minio
+
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels:
+          service: grafana

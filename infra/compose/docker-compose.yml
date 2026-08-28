@@ -1,0 +1,406 @@
+# ARGUS — Basis-Stack fuer die lokale Entwicklung.
+#
+# Diese Datei beschreibt die Dienste ohne Entwicklungskomfort: keine
+# veroeffentlichten Ports, keine gebundenen Konfigurationsverzeichnisse. Sie ist
+# damit auch in CI benutzbar. Der Komfort steht in docker-compose.override.yml,
+# die "docker compose" automatisch dazulaedt.
+#
+# Alle Images sind auf einen Digest festgenagelt. Der Tag daneben ist nur
+# Lesehilfe; verbindlich ist der Digest. Aktualisiert wird ueber
+# "make images-check" (meldet neue Digests) und einen bewussten Commit.
+#
+# Speicherbudget (Summe der Limits): 9,5 GB. Zusammen mit dem Overhead der
+# Container-Laufzeit laeuft der Stack damit auf einem Rechner mit 16 GB.
+
+name: ${COMPOSE_PROJECT_NAME:-argus}
+
+# ---------------------------------------------------------------------------
+# Wiederverwendbare Bausteine
+# ---------------------------------------------------------------------------
+
+x-common: &common
+  restart: unless-stopped
+  networks: [argus]
+  environment:
+    TZ: ${TZ:-UTC}
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+# Einmalig laufende Initialisierungscontainer. Sie muessen idempotent sein:
+# "make up" auf einem bereits initialisierten Stack darf nichts kaputt machen.
+x-init: &init
+  restart: "no"
+  networks: [argus]
+  environment:
+    TZ: ${TZ:-UTC}
+  deploy:
+    resources:
+      limits:
+        memory: 256m
+
+services:
+  # -------------------------------------------------------------------------
+  # PostgreSQL — relational + Geo + Zeitreihe in einem System
+  # -------------------------------------------------------------------------
+  postgres:
+    <<: *common
+    # Ueber POSTGRES_IMAGE austauschbar - noetig fuer das selbst gebaute
+    # Image mit Apache AGE (siehe images/postgres-age/Dockerfile).
+    image: ${POSTGRES_IMAGE:-timescale/timescaledb-ha:pg17.10-ts2.29.2@sha256:a693dd7fbb75b51c3d717507a9956501686edb123b48dd90b094fd5612d53abe}
+    environment:
+      TZ: ${TZ:-UTC}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER fehlt - .env aus .env.example anlegen}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt - .env aus .env.example anlegen}
+      POSTGRES_DB: ${POSTGRES_DB:-argus}
+      # Aktiviert die Checksummenpruefung von Anfang an. Nachtraeglich geht das
+      # nur mit Ausfallzeit, und stille Datenkorruption ist genau das, was ein
+      # System mit Provenienzanspruch nicht haben darf.
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      - postgres-data:${POSTGRES_DATA_DIR:-/home/postgres/pgdata}
+      - ./init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Kein Portcheck: geprueft wird, ob die Datenbank Abfragen beantwortet
+      # UND ob die Erweiterungen tatsaechlich geladen sind. Ein Postgres ohne
+      # PostGIS ist fuer ARGUS kein gesunder Postgres.
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -q &&
+          psql -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -tAc
+          "SELECT count(*) = 4 FROM pg_extension
+           WHERE extname IN ('postgis','timescaledb','vector','pg_trgm')"
+          | grep -q '^t$$'
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 90s
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${POSTGRES_MEM_LIMIT:-2g}
+          cpus: "${POSTGRES_CPUS:-2.0}"
+        reservations:
+          memory: 512m
+
+  # -------------------------------------------------------------------------
+  # ClickHouse — Aggregation ueber grosse Zeilenmengen
+  # -------------------------------------------------------------------------
+  clickhouse:
+    <<: *common
+    image: clickhouse/clickhouse-server:25.8.33.6@sha256:0152dd511befe6a2c2ef53e930726179669b08116da78500b37c51c96ff5ee77
+    environment:
+      TZ: ${TZ:-UTC}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:?CLICKHOUSE_USER fehlt - .env aus .env.example anlegen}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD fehlt - .env aus .env.example anlegen}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-argus}
+      # Legt den konfigurierten Nutzer mit Standardrechten an, statt den
+      # default-Nutzer ohne Passwort offen zu lassen.
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      - ./init/clickhouse:/docker-entrypoint-initdb.d:ro
+      - ./config/clickhouse/zz-argus.xml:/etc/clickhouse-server/config.d/zz-argus.xml:ro
+    ulimits:
+      # ClickHouse oeffnet sehr viele Dateien; der Standardwert reicht nicht.
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      # Echte Abfrage statt /ping: beantwortet der Server SQL und existiert die
+      # Zieldatenbank?
+      test:
+        - CMD-SHELL
+        - >-
+          clickhouse-client --host 127.0.0.1
+          --user "$${CLICKHOUSE_USER}" --password "$${CLICKHOUSE_PASSWORD}"
+          --query "SELECT count() FROM system.databases WHERE name = '$${CLICKHOUSE_DB}'"
+          | grep -q '^1$$'
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${CLICKHOUSE_MEM_LIMIT:-2g}
+          cpus: "${CLICKHOUSE_CPUS:-2.0}"
+        reservations:
+          memory: 512m
+
+  # -------------------------------------------------------------------------
+  # NATS JetStream — der Bus
+  # -------------------------------------------------------------------------
+  nats:
+    <<: *common
+    image: nats:2.14.6-alpine@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3
+    command:
+      - --name=argus-nats
+      - --jetstream
+      - --store_dir=/data
+      - --max_memory_store=${NATS_JS_MAX_MEMORY:-512M}
+      - --max_file_store=${NATS_JS_MAX_FILE:-4G}
+      - --http_port=8222
+      - --server_name=argus-dev
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      # /healthz?js-enabled-only=true prueft, ob JetStream wirklich bereit ist.
+      # Ein laufender NATS ohne JetStream wuerde jeden Konnektor scheitern
+      # lassen, saehe aber auf einem Portcheck gesund aus.
+      test:
+        - CMD-SHELL
+        - wget --spider -q "http://127.0.0.1:8222/healthz?js-enabled-only=true"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: ${NATS_MEM_LIMIT:-512m}
+          cpus: "${NATS_CPUS:-1.0}"
+
+  # -------------------------------------------------------------------------
+  # Valkey — Cache und Hot State
+  # -------------------------------------------------------------------------
+  valkey:
+    <<: *common
+    image: valkey/valkey:9.1.1-alpine@sha256:de31910896150d5e754a07d57d227cfdde4e258ddd0d1aa4607f2d2f95843715
+    command:
+      - valkey-server
+      - --requirepass
+      - ${VALKEY_PASSWORD:?VALKEY_PASSWORD fehlt - .env aus .env.example anlegen}
+      - --maxmemory
+      - ${VALKEY_MAXMEMORY:-256mb}
+      # Hot State ist wiederherstellbar; bei Speicherdruck werden die aeltesten
+      # Schluessel verdraengt, statt Schreibvorgaenge abzulehnen.
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - "yes"
+      - --save
+      - ""
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - valkey-cli -a "$${VALKEY_PASSWORD}" --no-auth-warning ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    environment:
+      TZ: ${TZ:-UTC}
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD}
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: ${VALKEY_MEM_LIMIT:-512m}
+          cpus: "${VALKEY_CPUS:-1.0}"
+
+  # -------------------------------------------------------------------------
+  # MinIO — Objektspeicher fuer den Bronze-Layer
+  # -------------------------------------------------------------------------
+  minio:
+    <<: *common
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: server /data --console-address ":9001"
+    environment:
+      TZ: ${TZ:-UTC}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER fehlt - .env aus .env.example anlegen}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD fehlt - .env aus .env.example anlegen}
+      # Erlaubt Prometheus das Abholen der Metriken ohne eigenes Token.
+      # Nur fuer die Entwicklungsumgebung vertretbar.
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      # "mc ready" prueft, ob der Dienst Anfragen bedient - nicht nur, ob der
+      # Port offen ist.
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: ${MINIO_MEM_LIMIT:-1g}
+          cpus: "${MINIO_CPUS:-1.0}"
+
+  # Legt die Buckets an. Idempotent: laeuft bei jedem "make up" erneut und
+  # meldet bestehende Buckets als in Ordnung.
+  minio-init:
+    <<: *init
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-UTC}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKETS: ${MINIO_BUCKETS:-argus-bronze argus-exports}
+    volumes:
+      - ./init/minio:/init:ro
+    entrypoint: ["/bin/sh", "/init/init-buckets.sh"]
+
+  # -------------------------------------------------------------------------
+  # OpenSearch — Volltext und Vektorsuche
+  # -------------------------------------------------------------------------
+  opensearch:
+    <<: *common
+    image: opensearchproject/opensearch:2.19.6@sha256:8690b204fe914c60ca76d451ac73bc0481e034d32d3779944c8caca56a2b003f
+    environment:
+      TZ: ${TZ:-UTC}
+      discovery.type: single-node
+      cluster.name: argus-dev
+      node.name: argus-os-1
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
+      # Entwicklungsumgebung: kein TLS, keine Authentifizierung. In staging und
+      # prod wird das Sicherheits-Plugin aktiviert (Kapitel 13).
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      # Cluster-Status statt Portcheck: gelb reicht (Einzelknoten hat keine
+      # Repliken), rot nicht.
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS "http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s"
+          | grep -qE '"status":"(green|yellow)"'
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: ${OPENSEARCH_MEM_LIMIT:-2g}
+          cpus: "${OPENSEARCH_CPUS:-2.0}"
+        reservations:
+          memory: 1g
+
+  # Legt die Index-Templates an. Idempotent (PUT ist ersetzend).
+  opensearch-init:
+    <<: *init
+    image: curlimages/curl:8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    volumes:
+      - ./init/opensearch:/init:ro
+    entrypoint: ["/bin/sh", "/init/init-templates.sh"]
+
+  # -------------------------------------------------------------------------
+  # NATS-Streams anlegen
+  # -------------------------------------------------------------------------
+  nats-init:
+    <<: *init
+    image: natsio/nats-box:0.19.7@sha256:ffce8bd103383f179f8c7f11cf645726acf5d17280706c530c3b342dbe16334c
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-UTC}
+      NATS_URL: nats://nats:4222
+    volumes:
+      - ./init/nats:/init:ro
+    entrypoint: ["/bin/sh", "/init/init-streams.sh"]
+
+  # -------------------------------------------------------------------------
+  # Observability
+  # -------------------------------------------------------------------------
+  prometheus:
+    <<: *common
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: ${PROMETHEUS_MEM_LIMIT:-1g}
+          cpus: "${PROMETHEUS_CPUS:-1.0}"
+
+  grafana:
+    <<: *common
+    image: grafana/grafana:13.0.7@sha256:e78917cdd3336d0d679d345b2e6d0f60a0fe85ed7ac3882b68f089fdb6ff2ace
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-UTC}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD fehlt - .env aus .env.example anlegen}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      # Der Health-Endpunkt meldet auch den Zustand der Grafana-Datenbank.
+      # Ein Grafana, das antwortet aber seine Datenbank nicht erreicht, ist
+      # nicht gesund.
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health | grep -q '\"database\"' && wget -q -O- http://127.0.0.1:3000/api/health | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${GRAFANA_MEM_LIMIT:-512m}
+          cpus: "${GRAFANA_CPUS:-1.0}"
+
+networks:
+  argus:
+    name: ${COMPOSE_PROJECT_NAME:-argus}-net
+    driver: bridge
+
+volumes:
+  postgres-data:
+  clickhouse-data:
+  clickhouse-logs:
+  nats-data:
+  valkey-data:
+  minio-data:
+  opensearch-data:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,67 @@
+# ARGUS — Entwicklungskomfort.
+#
+# "docker compose" laedt diese Datei automatisch zusaetzlich zu
+# docker-compose.yml. Sie enthaelt alles, was NUR fuer die lokale Entwicklung
+# gilt und in CI oder auf einem geteilten Rechner stoeren wuerde:
+#
+#   * veroeffentlichte Ports auf dem Host
+#   * anonymer Lesezugriff auf Grafana
+#   * gespraechigere Protokollierung
+#
+# Ohne diese Datei starten (z. B. in CI):
+#   docker compose -f docker-compose.yml up -d      bzw.  make up-base
+#
+# HINWEIS zu "command": Compose ersetzt Kommandolisten vollstaendig, es haengt
+# nichts an. Wer hier ein Argument ergaenzen will, muss die gesamte Liste aus
+# docker-compose.yml wiederholen. Deshalb wird das hier bewusst vermieden.
+
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  clickhouse:
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+      - "${CLICKHOUSE_METRICS_PORT:-9363}:9363"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      - ./init/clickhouse:/docker-entrypoint-initdb.d:ro
+      - ./config/clickhouse/zz-argus.xml:/etc/clickhouse-server/config.d/zz-argus.xml:ro
+      # Nur in der Entwicklung: ausfuehrliche Abfrageprotokolle.
+      - ./config/clickhouse/zz-dev-logging.xml:/etc/clickhouse-server/config.d/zz-dev-logging.xml:ro
+
+  nats:
+    ports:
+      - "${NATS_CLIENT_PORT:-4222}:4222"
+      - "${NATS_MONITOR_PORT:-8222}:8222"
+
+  valkey:
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+
+  minio:
+    ports:
+      # S3-API. Bewusst nicht 9000 - dort liegt ClickHouse nativ.
+      - "${MINIO_API_PORT:-9002}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+
+  opensearch:
+    ports:
+      - "${OPENSEARCH_PORT:-9200}:9200"
+
+  prometheus:
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  grafana:
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      # Dashboards ohne Anmeldung lesbar. Schreiben verlangt weiterhin den
+      # Admin-Zugang. Ausschliesslich fuer die lokale Entwicklung.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_LOG_LEVEL: info

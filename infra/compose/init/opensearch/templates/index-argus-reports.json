@@ -1,0 +1,51 @@
+{
+  "index_patterns": ["argus-reports-*"],
+  "composed_of": ["argus-base-settings"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "index.knn": true
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "report_id":      { "type": "keyword" },
+        "schema_version": { "type": "keyword" },
+        "kind":           { "type": "keyword" },
+        "url":            { "type": "keyword", "ignore_above": 2048 },
+        "canonical_url":  { "type": "keyword", "ignore_above": 2048 },
+        "title":          { "type": "text", "fields": { "raw": { "type": "keyword", "ignore_above": 512 } } },
+        "summary":        { "type": "text" },
+        "body_text":      { "type": "text" },
+        "lang":           { "type": "keyword" },
+        "published_at":   { "type": "date" },
+        "observed_at":    { "type": "date" },
+        "ingested_at":    { "type": "date" },
+        "publisher":      { "type": "keyword" },
+        "publisher_country": { "type": "keyword" },
+        "source_id":      { "type": "keyword" },
+        "source_reliability": { "type": "keyword" },
+        "story_cluster_id": { "type": "keyword" },
+        "event_ids":      { "type": "keyword" },
+        "entity_ids":     { "type": "keyword" },
+        "sentiment":      { "type": "float" },
+        "priority":       { "type": "float" },
+        "tags":           { "type": "keyword" },
+        "embedding": {
+          "type": "knn_vector",
+          "dimension": 1024,
+          "space_type": "cosinesimil",
+          "method": {
+            "name": "hnsw",
+            "engine": "lucene",
+            "parameters": { "ef_construction": 128, "m": 16 }
+          }
+        }
+      }
+    }
+  },
+  "_meta": {
+    "description": "Berichte fuer hybride Suche: BM25 ueber title/body_text plus k-NN ueber embedding. Dimension 1024 entspricht bge-m3 (Kapitel 6.2); bei einem Modellwechsel muss der Index neu aufgebaut werden."
+  },
+  "version": 1
+}

@@ -1,0 +1,15 @@
+{
+  "template": {
+    "settings": {
+      "index.number_of_shards": 1,
+      "index.number_of_replicas": 0,
+      "index.refresh_interval": "5s",
+      "index.mapping.total_fields.limit": 2000
+    }
+  },
+  "_meta": {
+    "description": "Grundeinstellungen aller ARGUS-Indizes. Einzelknoten-Entwicklungsstack: keine Repliken, sonst bleibt der Cluster dauerhaft gelb.",
+    "managed_by": "infra/compose/init/opensearch"
+  },
+  "version": 1
+}

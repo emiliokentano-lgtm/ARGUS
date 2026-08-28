@@ -1,0 +1,4 @@
+# Lokale Konfiguration mit Zugangsdaten. Die Vorlage .env.example gehoert ins
+# Repository, die daraus erzeugte .env nie.
+.env
+.env.local

@@ -1,0 +1,108 @@
+{
+  "uid": "argus-stack-health",
+  "title": "ARGUS — Stack-Gesundheit",
+  "description": "Zustand des lokalen Entwicklungs-Stacks. Nur Dienste mit nativem Prometheus-Endpunkt; Postgres, Valkey, OpenSearch und NATS folgen mit den Exportern aus Prompt 62.",
+  "tags": ["argus", "infra"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Scrape-Ziele erreichbar",
+      "description": "1 = Prometheus erreicht das Ziel. 0 bedeutet: Dienst weg, Port falsch oder Metrikendpunkt aus.",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "argus-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up",
+          "legendFormat": "{{job}}",
+          "datasource": { "type": "prometheus", "uid": "argus-prometheus" }
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "AUS", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "OK", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Verfuegbarkeit im Zeitverlauf",
+      "description": "Laesst Ausfaelle erkennen, die zwischen zwei Blicken auf die Stat-Kachel passiert sind.",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "argus-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up",
+          "legendFormat": "{{job}}",
+          "datasource": { "type": "prometheus", "uid": "argus-prometheus" }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 10 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "ClickHouse — aktive Abfragen",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "argus-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ClickHouseMetrics_Query",
+          "legendFormat": "laufende Abfragen",
+          "datasource": { "type": "prometheus", "uid": "argus-prometheus" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "min": 0 }, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "MinIO — belegter Speicher im Bronze-Layer",
+      "description": "Waechst mit jedem archivierten Rohabruf. Ein Knick nach unten bedeutet, dass jemand Bronze-Daten geloescht hat - das sollte nie passieren.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "argus-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "minio_bucket_usage_total_bytes",
+          "legendFormat": "{{bucket}}",
+          "datasource": { "type": "prometheus", "uid": "argus-prometheus" }
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] }
+    }
+  ]
+}

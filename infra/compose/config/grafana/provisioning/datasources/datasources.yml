@@ -1,0 +1,14 @@
+# ARGUS — Datenquellen. Wird beim Start von Grafana eingelesen.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: argus-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
+    editable: false

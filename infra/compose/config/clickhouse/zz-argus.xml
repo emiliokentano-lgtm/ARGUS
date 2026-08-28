@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<!--
+  ARGUS — ClickHouse-Ergaenzungen.
+
+  Der Dateiname beginnt mit zz-, damit die Datei nach allen mitgelieferten
+  Konfigurationen geladen wird und diese ueberschreiben kann.
+-->
+<clickhouse>
+    <!--
+      Prometheus-Endpunkt. ClickHouse liefert Metriken ohne zusaetzlichen
+      Exporter; der Port ist in .env als CLICKHOUSE_METRICS_PORT gefuehrt.
+    -->
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <errors>true</errors>
+    </prometheus>
+
+    <!--
+      ClickHouse liest das cgroup-Limit des Containers. Der Anteil laesst
+      Luft fuer Seitencache und Merges; ohne ihn wird der Container unter Last
+      vom Kernel beendet, was in der UI wie ein Datenverlust aussieht.
+    -->
+    <max_server_memory_usage_to_ram_ratio>0.7</max_server_memory_usage_to_ram_ratio>
+
+    <!-- Auf einem Entwicklungsrechner sind die Standardgroessen zu grosszuegig. -->
+    <mark_cache_size>268435456</mark_cache_size>
+    <uncompressed_cache_size>268435456</uncompressed_cache_size>
+
+    <logger>
+        <level>information</level>
+        <size>100M</size>
+        <count>3</count>
+    </logger>
+</clickhouse>
