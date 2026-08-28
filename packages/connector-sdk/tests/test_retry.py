@@ -10,7 +10,7 @@ import pytest
 
 from argus_connector.retry import (
     CircuitBreaker,
-    CircuitOpen,
+    CircuitOpenError,
     CircuitState,
     ConnectorError,
     ErrorKind,
@@ -42,7 +42,7 @@ class TestClassify:
             (httpx.ConnectError("certificate verify failed"), ErrorKind.TLS),
             (httpx.ConnectError("connection refused"), ErrorKind.CONNECT),
             (ValueError("kein JSON"), ErrorKind.INVALID_PAYLOAD),
-            (asyncio.TimeoutError(), ErrorKind.TIMEOUT),
+            (TimeoutError(), ErrorKind.TIMEOUT),
             (RuntimeError("was auch immer"), ErrorKind.UNKNOWN),
         ],
     )
@@ -116,7 +116,7 @@ class TestCircuitBreaker:
     def test_blocks_requests_while_open(self, clock):
         breaker = CircuitBreaker(failure_threshold=1, reset_timeout_s=10, clock=clock)
         breaker.on_failure()
-        with pytest.raises(CircuitOpen) as excinfo:
+        with pytest.raises(CircuitOpenError) as excinfo:
             breaker.before_request()
         assert excinfo.value.retry_after_s == pytest.approx(10.0)
 
@@ -149,7 +149,7 @@ class TestCircuitBreaker:
         breaker.before_request()
         breaker.on_failure()
         assert breaker.state is CircuitState.OPEN
-        with pytest.raises(CircuitOpen):
+        with pytest.raises(CircuitOpenError):
             breaker.before_request()
 
     def test_success_resets_the_failure_count(self, clock):

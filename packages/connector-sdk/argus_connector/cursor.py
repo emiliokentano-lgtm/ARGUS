@@ -124,7 +124,7 @@ class ValkeyCursorStore:
         self._prefix = key_prefix
         self._client = client
 
-    async def _get_client(self):
+    async def _get_client(self) -> Any:
         if self._client is None:
             import redis.asyncio as redis  # lokal importiert: optionale Abhaengigkeit
 
@@ -176,7 +176,7 @@ class PostgresCursorStore:
         self._pool = pool
         self._ready = False
 
-    async def _connect(self):
+    async def _connect(self) -> Any:
         import psycopg
 
         return await psycopg.AsyncConnection.connect(self._dsn, autocommit=True)
@@ -207,7 +207,11 @@ class PostgresCursorStore:
         await self._ensure_table()
         async with await self._connect() as conn:
             cur = await conn.execute(
-                f'SELECT payload FROM "{self._schema}".cursors '
+                # Unterdrueckung unten begruendet: der Schemaname kommt aus der
+                # Konfiguration des Prozesses, nie aus einer Nachricht
+                # oder Nutzereingabe. Werte werden ausschliesslich als
+                # Parameter uebergeben.
+                f'SELECT payload FROM "{self._schema}".cursors '  # noqa: S608
                 "WHERE connector_id = %s AND slot = %s",
                 (connector_id, slot),
             )
@@ -221,7 +225,7 @@ class PostgresCursorStore:
         await self._ensure_table()
         async with await self._connect() as conn:
             await conn.execute(
-                f'INSERT INTO "{self._schema}".cursors (connector_id, slot, payload) '
+                f'INSERT INTO "{self._schema}".cursors (connector_id, slot, payload) '  # noqa: S608
                 "VALUES (%s, %s, %s::jsonb) "
                 "ON CONFLICT (connector_id, slot) DO UPDATE "
                 "SET payload = excluded.payload, updated_at = clock_timestamp()",
@@ -244,7 +248,7 @@ class PostgresCursorStore:
         await self._ensure_table()
         async with await self._connect() as conn:
             await conn.execute(
-                f'DELETE FROM "{self._schema}".cursors '
+                f'DELETE FROM "{self._schema}".cursors '  # noqa: S608
                 "WHERE connector_id = %s AND slot = 'pending'",
                 (connector_id,),
             )
@@ -272,15 +276,18 @@ class ChainedCursorStore:
 
     async def _load_from(self, method: str, connector_id: str) -> Cursor | None:
         try:
-            cursor = await getattr(self._fast, method)(connector_id)
+            cursor: Cursor | None = await getattr(self._fast, method)(connector_id)
             if cursor is not None:
                 return cursor
         except Exception as exc:  # noqa: BLE001 - der schnelle Speicher darf ausfallen
             logger.warning(
                 "Schneller Cursor-Speicher nicht erreichbar (%s), weiche auf den "
-                "dauerhaften aus: %s", method, exc,
+                "dauerhaften aus: %s",
+                method,
+                exc,
             )
-        return await getattr(self._durable, method)(connector_id)
+        fallback: Cursor | None = await getattr(self._durable, method)(connector_id)
+        return fallback
 
     async def load(self, connector_id: str) -> Cursor | None:
         return await self._load_from("load", connector_id)
@@ -386,7 +393,9 @@ class CursorManager:
         """Batch aufgeben, ohne festzuschreiben. Der naechste Lauf wiederholt ihn."""
         if self._pending is None:
             return
-        logger.info("Batch aufgegeben, Cursor bleibt bei sequence=%s",
-                    self._committed.sequence if self._committed else 0)
+        logger.info(
+            "Batch aufgegeben, Cursor bleibt bei sequence=%s",
+            self._committed.sequence if self._committed else 0,
+        )
         await self._store.clear_pending(self._connector_id)
         self._pending = None

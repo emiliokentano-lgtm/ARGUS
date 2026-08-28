@@ -200,7 +200,9 @@ def upgrade() -> None:
             "'Auffangpartition fuer Zeitstempel ausserhalb der angelegten "
             "Tagespartitionen. Nicht leer = Datenqualitaetsvorfall.'"
         )
-        op.execute("SELECT argus.ensure_observation_partitions(current_date - 3, current_date + 14)")
+        op.execute(
+            "SELECT argus.ensure_observation_partitions(current_date - 3, current_date + 14)"
+        )
 
     # --- Indizes ------------------------------------------------------
     # Die zentrale Abfrage der Track-Engine: "alle Beobachtungen einer Entitaet
@@ -211,8 +213,7 @@ def upgrade() -> None:
     )
     # Dieselbe Abfrage fuer noch nicht aufgeloeste Verweise.
     op.execute(
-        "CREATE INDEX observations_ref_time_idx "
-        "ON argus.observations (ref_id, observed_at DESC)"
+        "CREATE INDEX observations_ref_time_idx ON argus.observations (ref_id, observed_at DESC)"
     )
     op.execute(
         "CREATE INDEX observations_track_time_idx "
@@ -332,19 +333,11 @@ def downgrade() -> None:
         # Policies haengen an der Hypertable und verschwinden mit ihr; das
         # ausdrueckliche Entfernen macht den Rollback auch dann sauber, wenn
         # jemand die Tabelle inzwischen umgebaut hat.
-        op.execute(
-            "SELECT remove_retention_policy('argus.observations', if_exists => true)"
-        )
-        op.execute(
-            "SELECT remove_compression_policy('argus.observations', if_exists => true)"
-        )
+        op.execute("SELECT remove_retention_policy('argus.observations', if_exists => true)")
+        op.execute("SELECT remove_compression_policy('argus.observations', if_exists => true)")
     else:
         op.execute("DROP FUNCTION IF EXISTS argus.observations_maintenance()")
-        op.execute(
-            "DROP FUNCTION IF EXISTS argus.drop_observation_partitions_older_than(interval)"
-        )
-        op.execute(
-            "DROP FUNCTION IF EXISTS argus.ensure_observation_partitions(date, date)"
-        )
+        op.execute("DROP FUNCTION IF EXISTS argus.drop_observation_partitions_older_than(interval)")
+        op.execute("DROP FUNCTION IF EXISTS argus.ensure_observation_partitions(date, date)")
     # Partitionen und Chunks gehen mit der Tabelle.
     op.execute("DROP TABLE IF EXISTS argus.observations")

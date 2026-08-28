@@ -88,7 +88,10 @@ class DedupeKeyBuilder:
         # verschachtelten Strukturen, keine ASCII-Flucht. Damit ist die
         # Byte-Darstellung eindeutig und plattformunabhaengig.
         canonical = json.dumps(
-            values, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            values,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
             default=str,
         ).encode("utf-8")
         digest = hashlib.blake2b(canonical, digest_size=self.digest_size).hexdigest()

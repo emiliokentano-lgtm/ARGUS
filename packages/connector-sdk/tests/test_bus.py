@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from argus_connector.bus import BusUnavailable, MemoryPublisher, NatsPublisher, PublishResult
+from argus_connector.bus import BusUnavailableError, MemoryPublisher, NatsPublisher, PublishResult
 
 
 class TestMemoryPublisher:
@@ -38,10 +38,8 @@ class TestMemoryPublisher:
     async def test_failure_is_raised_as_bus_unavailable(self):
         publisher = MemoryPublisher(fail_after=2)
         await publisher.connect()
-        with pytest.raises(BusUnavailable):
-            await publisher.publish_batch(
-                [("s", {}, "a"), ("s", {}, "b"), ("s", {}, "c")]
-            )
+        with pytest.raises(BusUnavailableError):
+            await publisher.publish_batch([("s", {}, "a"), ("s", {}, "b"), ("s", {}, "c")])
 
 
 class _FakeAck:
@@ -55,7 +53,17 @@ class _FakeJetStream:
         self._duplicate_ids = duplicate_ids or set()
         self._fail = fail
 
-    async def publish(self, subject, body, *, timeout, headers, stream):  # noqa: ANN001
+    # Signatur bewusst wie bei nats-py; der Parametername timeout ist dort
+    # vorgegeben und darf hier nicht abweichen.
+    async def publish(
+        self,
+        subject,
+        body,
+        *,
+        timeout,  # noqa: ASYNC109
+        headers,
+        stream,
+    ):
         if self._fail:
             raise TimeoutError("keine Bestaetigung")
         self.published.append((subject, body, headers))
@@ -95,11 +103,9 @@ class TestNatsPublisher:
     async def test_missing_ack_raises_bus_unavailable(self):
         """Ohne Bestaetigung gilt die Nachricht als nicht zugestellt - und der
         Cursor darf nicht vorruecken."""
-        publisher = NatsPublisher(
-            "nats://x", connection=_FakeConnection(_FakeJetStream(fail=True))
-        )
+        publisher = NatsPublisher("nats://x", connection=_FakeConnection(_FakeJetStream(fail=True)))
         await publisher.connect()
-        with pytest.raises(BusUnavailable):
+        with pytest.raises(BusUnavailableError):
             await publisher.publish("s", {"a": 1}, dedupe_key="k")
 
     async def test_batch_result(self):

@@ -107,7 +107,7 @@ def upgrade() -> None:
     op.execute(
         "COMMENT ON COLUMN argus.reports.body_withheld_for_license IS "
         "'true, wenn der Volltext aus Lizenzgruenden nicht gespeichert wurde. "
-        "Unterscheidet \"kein Text vorhanden\" von \"Text vorhanden, aber nicht "
+        'Unterscheidet "kein Text vorhanden" von "Text vorhanden, aber nicht '
         "speicherbar\".'"
     )
 
@@ -119,7 +119,9 @@ def upgrade() -> None:
         "CREATE INDEX reports_cluster_idx ON argus.reports (story_cluster_id, published_at) "
         "WHERE story_cluster_id IS NOT NULL"
     )
-    op.execute("CREATE INDEX reports_simhash_idx ON argus.reports (simhash) WHERE simhash IS NOT NULL")
+    op.execute(
+        "CREATE INDEX reports_simhash_idx ON argus.reports (simhash) WHERE simhash IS NOT NULL"
+    )
     op.execute(
         "CREATE UNIQUE INDEX reports_content_hash_idx ON argus.reports (content_hash) "
         "WHERE content_hash IS NOT NULL"
@@ -178,7 +180,9 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX report_mentions_entity_idx ON argus.report_mentions (entity_id) WHERE entity_id IS NOT NULL")
+    op.execute(
+        "CREATE INDEX report_mentions_entity_idx ON argus.report_mentions (entity_id) WHERE entity_id IS NOT NULL"
+    )
 
     # --- Bericht <-> Ereignis -------------------------------------------
     op.execute(
@@ -228,7 +232,9 @@ def upgrade() -> None:
         "CREATE INDEX report_places_geo_idx ON argus.report_places USING gist (geo_point) "
         "WHERE geo_point IS NOT NULL"
     )
-    op.execute("CREATE INDEX report_places_h3_idx ON argus.report_places (h3_r7) WHERE h3_r7 IS NOT NULL")
+    op.execute(
+        "CREATE INDEX report_places_h3_idx ON argus.report_places (h3_r7) WHERE h3_r7 IS NOT NULL"
+    )
 
 
 def downgrade() -> None:

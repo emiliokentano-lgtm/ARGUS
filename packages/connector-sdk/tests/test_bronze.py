@@ -40,15 +40,15 @@ def store() -> RecordingStore:
 
 
 def _writer(store, clock, tmp_path, **kwargs) -> BronzeWriter:
-    defaults = dict(
-        source_id="testquelle",
-        max_records=1000,
-        max_bytes=10 * 1024 * 1024,
-        max_age_s=3600.0,
-        compress=False,
-        spool_dir=tmp_path / "spool",
-        clock=clock,
-    )
+    defaults: dict[str, object] = {
+        "source_id": "testquelle",
+        "max_records": 1000,
+        "max_bytes": 10 * 1024 * 1024,
+        "max_age_s": 3600.0,
+        "compress": False,
+        "spool_dir": tmp_path / "spool",
+        "clock": clock,
+    }
     defaults.update(kwargs)
     return BronzeWriter(store, **defaults)
 

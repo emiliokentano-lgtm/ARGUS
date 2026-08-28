@@ -9,10 +9,9 @@ verschluckt.
 
 from __future__ import annotations
 
-from google.protobuf import json_format
-
 from argus.v1 import common_pb2, event_pb2, observation_pb2
 from conftest import load_fixture
+from google.protobuf import json_format
 
 
 def _obs(name: str) -> observation_pb2.Observation:
@@ -24,6 +23,7 @@ def _event(name: str) -> event_pb2.Event:
 
 
 # --- 1. Unbekannte Entitaet -------------------------------------------------
+
 
 def test_unknown_entity_keeps_raw_reference():
     obs = _obs("unknown-entity.observation.json")
@@ -43,6 +43,7 @@ def test_unresolved_is_distinguishable_from_never_attempted():
 
 
 # --- 2. Position ohne Zeitstempel -------------------------------------------
+
 
 def test_missing_timestamp_is_absent_not_zero():
     obs = _obs("missing-timestamp.observation.json")
@@ -76,6 +77,7 @@ def test_absent_heading_is_not_zero():
 
 # --- 3. Ereignis ohne exakten Ort -------------------------------------------
 
+
 def test_country_only_event_has_no_invented_point():
     ev = _event("country-only.event.json")
     assert not ev.geo.HasField("geometry"), "Kein erfundener Punkt in der Landesmitte"
@@ -106,6 +108,7 @@ def test_unspecified_and_unknown_precision_differ():
 
 # --- 4. Widerspruechliche Meldungen -----------------------------------------
 
+
 def test_dispute_keeps_both_claims():
     ev = _event("disputed.event.json")
     assert ev.status == event_pb2.EVENT_STATUS_DISPUTED
@@ -129,6 +132,7 @@ def test_dispute_lowers_confidence_and_counts_contradicting_sources():
 
 
 # --- 5. Zurueckgezogene Meldung ---------------------------------------------
+
 
 def test_retraction_preserves_the_record():
     ev = _event("retracted.event.json")

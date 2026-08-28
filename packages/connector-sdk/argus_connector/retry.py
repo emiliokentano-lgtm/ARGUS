@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-class ErrorKind(str, enum.Enum):
+class ErrorKind(enum.StrEnum):
     """Fehlerklassen. Sie landen als Label in connector_errors_total und
     entscheiden, ob wiederholt wird."""
 
@@ -32,9 +32,9 @@ class ErrorKind(str, enum.Enum):
     TLS = "tls"
     CONNECT = "connect"
     TIMEOUT = "timeout"
-    RATE_LIMITED = "rate_limited"      # HTTP 429
-    SERVER_ERROR = "server_error"      # HTTP 5xx
-    CLIENT_ERROR = "client_error"      # HTTP 4xx ausser 429
+    RATE_LIMITED = "rate_limited"  # HTTP 429
+    SERVER_ERROR = "server_error"  # HTTP 5xx
+    CLIENT_ERROR = "client_error"  # HTTP 4xx ausser 429
     EMPTY_RESPONSE = "empty_response"
     INVALID_PAYLOAD = "invalid_payload"
     SCHEMA_DRIFT = "schema_drift"
@@ -84,15 +84,13 @@ class PermanentError(ConnectorError):
     kind = ErrorKind.CLIENT_ERROR
 
 
-class CircuitOpen(ConnectorError):
+class CircuitOpenError(ConnectorError):
     """Der Circuit Breaker laesst gerade keine Anfragen durch."""
 
     kind = ErrorKind.CONNECT
 
     def __init__(self, retry_after_s: float) -> None:
-        super().__init__(
-            f"Circuit Breaker offen, naechster Versuch in {retry_after_s:.1f} s"
-        )
+        super().__init__(f"Circuit Breaker offen, naechster Versuch in {retry_after_s:.1f} s")
         self.retry_after_s = retry_after_s
 
 
@@ -113,13 +111,19 @@ def classify(exc: BaseException) -> ErrorKind:
         if 500 <= status < 600:
             return ErrorKind.SERVER_ERROR
         return ErrorKind.CLIENT_ERROR
-    if isinstance(exc, httpx.ConnectTimeout | httpx.ReadTimeout | httpx.WriteTimeout | httpx.PoolTimeout):
+    if isinstance(
+        exc, httpx.ConnectTimeout | httpx.ReadTimeout | httpx.WriteTimeout | httpx.PoolTimeout
+    ):
         return ErrorKind.TIMEOUT
     # Muss vor ConnectError geprueft werden: ConnectError ist die Oberklasse.
     if isinstance(exc, httpx.ConnectError):
         text = str(exc).lower()
-        if "name or service not known" in text or "nodename nor servname" in text \
-                or "temporary failure in name resolution" in text or "getaddrinfo" in text:
+        if (
+            "name or service not known" in text
+            or "nodename nor servname" in text
+            or "temporary failure in name resolution" in text
+            or "getaddrinfo" in text
+        ):
             return ErrorKind.DNS
         if "certificate" in text or "ssl" in text or "tls" in text:
             return ErrorKind.TLS
@@ -159,13 +163,14 @@ class RetryPolicy:
         """
         if attempt < 1:
             raise ValueError("attempt ist 1-basiert")
-        ceiling = min(self.max_delay_s, self.base_delay_s * (2 ** (attempt - 1)))
+        ceiling: float = min(self.max_delay_s, self.base_delay_s * (2 ** (attempt - 1)))
         if not self.jitter:
             return ceiling
-        return (rng or random).uniform(0.0, ceiling)
+        source = rng if rng is not None else random
+        return float(source.uniform(0.0, ceiling))
 
 
-class CircuitState(str, enum.Enum):
+class CircuitState(enum.StrEnum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -198,11 +203,11 @@ class CircuitBreaker:
         return max(0.0, self.reset_timeout_s - (self.clock() - self.opened_at))
 
     def before_request(self) -> None:
-        """Wirft CircuitOpen, wenn gerade nichts durchgelassen wird."""
+        """Wirft CircuitOpenError, wenn gerade nichts durchgelassen wird."""
         if self.state is CircuitState.OPEN:
             remaining = self._retry_after()
             if remaining > 0:
-                raise CircuitOpen(remaining)
+                raise CircuitOpenError(remaining)
             # Schonfrist abgelaufen: einen Testabruf zulassen.
             self.state = CircuitState.HALF_OPEN
             self.successes = 0
@@ -231,7 +236,8 @@ class CircuitBreaker:
         if self.failures >= self.failure_threshold:
             logger.warning(
                 "Circuit Breaker offen nach %d Fehlern - Pause %.0f s",
-                self.failures, self.reset_timeout_s,
+                self.failures,
+                self.reset_timeout_s,
             )
             self.state = CircuitState.OPEN
             self.opened_at = self.clock()
@@ -259,7 +265,7 @@ async def retry_async(
             breaker.before_request()
         try:
             result = await operation()
-        except BaseException as exc:  # noqa: BLE001 - wird klassifiziert und weitergereicht
+        except BaseException as exc:
             if isinstance(exc, asyncio.CancelledError):
                 raise
             kind = classify(exc)
@@ -282,7 +288,11 @@ async def retry_async(
                 on_error(kind, attempt, delay)
             logger.warning(
                 "Versuch %d/%d fehlgeschlagen (%s), erneut in %.2f s: %s",
-                attempt, policy.max_attempts, kind.value, delay, exc,
+                attempt,
+                policy.max_attempts,
+                kind.value,
+                delay,
+                exc,
             )
             await sleep(delay)
         else:
@@ -290,5 +300,6 @@ async def retry_async(
                 breaker.on_success()
             return result
 
-    assert last_exc is not None
+    if last_exc is None:  # pragma: no cover - kann nur bei max_attempts < 1 auftreten
+        raise RuntimeError("retry_async ohne einen einzigen Versuch aufgerufen")
     raise last_exc

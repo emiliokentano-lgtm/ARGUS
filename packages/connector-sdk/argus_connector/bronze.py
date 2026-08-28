@@ -92,7 +92,7 @@ class S3ObjectStore:
         self._secret_key = secret_key
         self._client = client
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         if self._client is None:
             import boto3  # lokal importiert: optionale Abhaengigkeit
 
@@ -186,7 +186,9 @@ class BronzeWriter:
         line = (
             record
             if isinstance(record, bytes)
-            else json.dumps(record, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8")
+            else json.dumps(record, separators=(",", ":"), ensure_ascii=False, default=str).encode(
+                "utf-8"
+            )
         ) + b"\n"
 
         async with self._lock:
@@ -214,9 +216,7 @@ class BronzeWriter:
             return True
         if self._buffer_bytes >= self.max_bytes:
             return True
-        if self._oldest_at is not None and (self._clock() - self._oldest_at) >= self.max_age_s:
-            return True
-        return False
+        return self._oldest_at is not None and (self._clock() - self._oldest_at) >= self.max_age_s
 
     async def add_many(self, records: Iterable[Any], *, fetched_at: float | None = None) -> None:
         for record in records:
@@ -253,7 +253,9 @@ class BronzeWriter:
         except Exception as exc:  # noqa: BLE001 - jeder Speicherfehler fuehrt zum Spool
             logger.error(
                 "Bronze-Schreibvorgang nach %s fehlgeschlagen (%s). Buendel wandert "
-                "in den Spool und wird spaeter nachgereicht.", key, exc,
+                "in den Spool und wird spaeter nachgereicht.",
+                key,
+                exc,
             )
             self._spool(key, body)
             self._reset_buffer()
@@ -282,7 +284,8 @@ class BronzeWriter:
         if self._spool_dir is None:
             logger.critical(
                 "Kein Spool-Verzeichnis konfiguriert - %d Bytes Rohdaten gehen "
-                "verloren. spool_dir setzen.", len(body),
+                "verloren. spool_dir setzen.",
+                len(body),
             )
             return
         target = self._spool_dir / key

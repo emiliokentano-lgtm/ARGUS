@@ -1,0 +1,25 @@
+# Nur die TypeScript-Erzeugung.
+#
+# Warum eine zweite Vorlage: buf.gen.yaml erzeugt auch den Python-Code und
+# braucht dafuer den protoc-Shim, also eine Python-Umgebung. Die
+# TypeScript-Werkzeugkette soll ihren Teil ohne Python erzeugen koennen -
+# sonst haengt jeder 'turbo run typecheck' am Python-Setup.
+version: v2
+
+managed:
+  enabled: false
+
+clean: true
+
+plugins:
+  - local: node_modules/.bin/protoc-gen-ts_proto
+    out: gen/ts
+    opt:
+      - esModuleInterop=true
+      - snakeToCamel=false
+      - useDate=string
+      - forceLong=string
+      - oneof=unions
+      - useOptionals=messages
+      - outputServices=false
+      - unrecognizedEnum=false

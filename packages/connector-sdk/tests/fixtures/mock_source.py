@@ -35,7 +35,7 @@ def make_handler(state: MockSourceState):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *args) -> None:  # noqa: ANN002 - Protokoll unterdruecken
+        def log_message(self, *args) -> None:
             return
 
         def _send(self, status: int, payload: dict, extra_headers: dict | None = None) -> None:
@@ -49,7 +49,7 @@ def make_handler(state: MockSourceState):
             self.end_headers()
             self.wfile.write(body)
 
-        def do_GET(self) -> None:  # noqa: N802 - von BaseHTTPRequestHandler vorgegeben
+        def do_GET(self) -> None:
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
 
@@ -74,8 +74,7 @@ def make_handler(state: MockSourceState):
             limit = int(params.get("limit", ["50"])[0])
             end = min(cursor + limit, state.total)
             records = [
-                {"id": i, "value": f"satz-{i}", "ts": 1_700_000_000 + i}
-                for i in range(cursor, end)
+                {"id": i, "value": f"satz-{i}", "ts": 1_700_000_000 + i} for i in range(cursor, end)
             ]
             self._send(
                 200,
@@ -107,7 +106,7 @@ class MockSource:
         self._thread.start()
         return self
 
-    def __exit__(self, *exc) -> None:  # noqa: ANN002
+    def __exit__(self, *exc) -> None:
         self._server.shutdown()
         self._server.server_close()
         self._thread.join(timeout=5)

@@ -10,10 +10,8 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
-
 from conftest import API_DIR, requires_db
 
 pytestmark = requires_db
@@ -50,13 +48,13 @@ def test_ddl_reference_matches_migrations(db_url, tmp_path):
             env={**os.environ, "DATABASE_URL": db_url},
             capture_output=True,
             text=True,
+            check=False,
         )
         assert result.returncode == 0, result.stderr
         regenerated = SCHEMA_FILE.read_text(encoding="utf-8")
         committed = backup.read_text(encoding="utf-8")
         assert regenerated == committed, (
-            "Die DDL-Referenz weicht von den Migrationen ab. Neu erzeugen mit:\n"
-            "    make db-ddl"
+            "Die DDL-Referenz weicht von den Migrationen ab. Neu erzeugen mit:\n    make db-ddl"
         )
     finally:
         shutil.copy(backup, SCHEMA_FILE)

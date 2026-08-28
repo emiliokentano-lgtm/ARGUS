@@ -15,8 +15,10 @@ SCHEMA_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
 if [ -n "${ARGUS_PROTOC_PYTHON:-}" ]; then
   PY="${ARGUS_PROTOC_PYTHON}"
-elif [ -x "${SCHEMA_DIR}/.venv/bin/python" ]; then
-  PY="${SCHEMA_DIR}/.venv/bin/python"
+elif [ -x "${SCHEMA_DIR}/../../.venv/bin/python" ]; then
+  # Python kommt aus dem Workspace an der Wurzel, nicht mehr aus einer
+  # paketeigenen Umgebung.
+  PY="${SCHEMA_DIR}/../../.venv/bin/python"
 else
   PY="python3"
 fi

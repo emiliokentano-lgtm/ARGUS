@@ -1,0 +1,49 @@
+# ARGUS — was nie ins Repository gehoert.
+#
+# Grundregel: erzeugte Artefakte und lokale Zustaende bleiben draussen. Alles,
+# was aus den Quellen wieder entstehen kann, ist kein Quelltext.
+
+# --- Python ---------------------------------------------------------------
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# --- Node -----------------------------------------------------------------
+node_modules/
+.turbo/
+*.tsbuildinfo
+
+# --- Go -------------------------------------------------------------------
+# go.work.sum haengt an der lokalen Modulaufloesung.
+go.work.sum
+# 'go build' ohne -o legt das Binary im Modulverzeichnis ab. Es traegt den
+# Modulnamen und faellt in einer Dateiliste kaum auf - deshalb ausdruecklich.
+/services/ingest-air/ingest-air
+/services/ingest-sea/ingest-sea
+
+# --- Erzeugte Artefakte ---------------------------------------------------
+# Die Protos sind die Wahrheitsquelle; alles unter gen/ entsteht daraus.
+packages/schemas/gen/
+packages/schemas/build/
+packages/sdk-py/**
+packages/sdk-ts/**
+!packages/sdk-py/README.md
+!packages/sdk-ts/README.md
+
+# --- Lokale Konfiguration mit Zugangsdaten --------------------------------
+.env
+.env.local
+infra/compose/.env
+
+# --- Werkzeuge ------------------------------------------------------------
+.tools/
+sbom/

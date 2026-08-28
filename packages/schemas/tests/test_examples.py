@@ -8,14 +8,11 @@ Geprueft wird dreifach:
 
 from __future__ import annotations
 
-import json
-
 import pytest
-from google.protobuf import json_format
-from jsonschema import Draft202012Validator
-
 from argus.v1 import event_pb2, observation_pb2
 from conftest import load_fixture, load_schema
+from google.protobuf import json_format
+from jsonschema import Draft202012Validator
 
 CASES = [
     ("concept/observation.json", "Observation", observation_pb2.Observation),
@@ -124,7 +121,9 @@ def test_schema_rejects_unknown_field():
 
 def test_concept_observation_keeps_documented_values():
     """Die Werte aus Kapitel 3.2 duerfen sich beim Parsen nicht veraendern."""
-    obs = json_format.ParseDict(load_fixture("concept/observation.json"), observation_pb2.Observation())
+    obs = json_format.ParseDict(
+        load_fixture("concept/observation.json"), observation_pb2.Observation()
+    )
     assert obs.entity_ref.id == "imo:9284435"
     assert obs.geo.h3_r7 == "871f0d4c2ffffff"
     assert obs.kinematics.sog_kn == pytest.approx(11.2)

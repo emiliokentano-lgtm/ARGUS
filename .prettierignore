@@ -1,0 +1,20 @@
+# Erzeugte und fremde Dateien
+**/gen/**
+**/dist/**
+**/node_modules/**
+**/.venv/**
+packages/schemas/baseline/**
+packages/schemas/sql/**
+uv.lock
+pnpm-lock.yaml
+go.sum
+
+# Python wird von Ruff formatiert, nicht von Prettier.
+*.py
+
+# Werkzeug-Zwischenstaende
+**/.pytest_cache/**
+**/.ruff_cache/**
+**/.mypy_cache/**
+**/htmlcov/**
+**/.turbo/**

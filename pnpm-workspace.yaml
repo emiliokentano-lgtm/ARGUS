@@ -1,0 +1,8 @@
+# ARGUS — pnpm-Workspace.
+#
+# Verzeichnisse ohne package.json werden von pnpm uebergangen. Die
+# Platzhalter unter apps/ und packages/ treten dem Workspace erst bei, wenn
+# sie Code enthalten - dieselbe Regel wie beim Python-Workspace.
+packages:
+  - "apps/*"
+  - "packages/*"

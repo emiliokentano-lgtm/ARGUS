@@ -58,7 +58,14 @@
     "independent_sources": 6,
     "first_seen_source": "reuters",
     "first_seen_at": "2026-08-28T12:15:31.402Z",
-    "source_ids": ["reuters-rss", "ecb-press", "bloomberg-rss", "faz-rss", "handelsblatt-rss", "afp-rss"],
+    "source_ids": [
+      "reuters-rss",
+      "ecb-press",
+      "bloomberg-rss",
+      "faz-rss",
+      "handelsblatt-rss",
+      "afp-rss"
+    ],
     "contradicting_sources": 0
   },
   "reports": ["01HZY4T5V6REPORT0000000001", "01HZY4T5V6REPORT0000000002"],

@@ -194,7 +194,9 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX event_entities_entity_idx ON argus.event_entities (entity_id) WHERE entity_id IS NOT NULL")
+    op.execute(
+        "CREATE INDEX event_entities_entity_idx ON argus.event_entities (entity_id) WHERE entity_id IS NOT NULL"
+    )
     op.execute("CREATE INDEX event_entities_ref_idx ON argus.event_entities (ref_id)")
     op.execute(
         "CREATE INDEX event_entities_unresolved_idx ON argus.event_entities (resolution_status) "
@@ -254,7 +256,9 @@ def upgrade() -> None:
         "Der Widerspruch wird gefuehrt, nicht durch Auswahl eines Siegers "
         "aufgeloest - preferred_claim_index bleibt NULL, solange er offen ist.'"
     )
-    op.execute("CREATE INDEX event_contradictions_event_idx ON argus.event_contradictions (event_id)")
+    op.execute(
+        "CREATE INDEX event_contradictions_event_idx ON argus.event_contradictions (event_id)"
+    )
     op.execute(
         "CREATE INDEX event_contradictions_open_idx ON argus.event_contradictions (detected_at DESC) "
         "WHERE resolved_at IS NULL"
@@ -285,9 +289,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    guard_destructive_downgrade(
-        "event_contradictions", "event_links", "event_entities", "events"
-    )
+    guard_destructive_downgrade("event_contradictions", "event_links", "event_entities", "events")
     op.execute("DROP FUNCTION IF EXISTS argus.event_as_of(text, timestamptz)")
     op.execute("DROP TABLE IF EXISTS argus.event_contradictions")
     op.execute("DROP TABLE IF EXISTS argus.event_links")

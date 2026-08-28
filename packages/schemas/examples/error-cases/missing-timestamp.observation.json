@@ -11,7 +11,12 @@
   "ingested_at": "2026-08-28T09:22:00.100Z",
   "source": { "id": "adsb-lol", "reliability": "SOURCE_RELIABILITY_C" },
   "kind": "OBSERVATION_KIND_POSITION",
-  "geo": { "lat": 48.3538, "lon": 11.7861, "h3_r7": "871f9a4c4ffffff", "precision": "GEO_PRECISION_EXACT" },
+  "geo": {
+    "lat": 48.3538,
+    "lon": 11.7861,
+    "h3_r7": "871f9a4c4ffffff",
+    "precision": "GEO_PRECISION_EXACT"
+  },
   "kinematics": { "altitude_m": 10668, "ground_speed_kn": 442 },
   "quality": {
     "time_quality": "TIME_QUALITY_INFERRED_FROM_INGEST",

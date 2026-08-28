@@ -38,7 +38,7 @@ from argus_connector.retry import (
 logger = logging.getLogger(__name__)
 
 
-class ConnectorMode(str, enum.Enum):
+class ConnectorMode(enum.StrEnum):
     POLL = "poll"
     STREAM = "stream"
     WEBHOOK = "webhook"
@@ -173,9 +173,7 @@ class BaseConnector:
         self._client = client
         self._owns_client = client is None
         self._dedupe: DedupeKeyBuilder | None = (
-            DedupeKeyBuilder(settings.source_id, self.dedupe_fields)
-            if self.dedupe_fields
-            else None
+            DedupeKeyBuilder(settings.source_id, self.dedupe_fields) if self.dedupe_fields else None
         )
         self.last_clock_skew_s: float | None = None
 
@@ -231,7 +229,9 @@ class BaseConnector:
             logger.warning(
                 "Uhrendrift zu %s betraegt %.1f s (Grenze %.0f s). Zeitstempel "
                 "dieser Quelle sind mit Vorsicht zu behandeln.",
-                self.settings.source_id, skew, self.settings.max_clock_skew_s,
+                self.settings.source_id,
+                skew,
+                self.settings.max_clock_skew_s,
             )
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
@@ -277,9 +277,7 @@ class BaseConnector:
         """GET mit JSON-Antwort. Behandelt leere und ungueltige Antworten."""
         response = await self.request("GET", url, **kwargs)
         if not response.content:
-            raise ConnectorError(
-                f"Leere Antwort von {url}", kind=ErrorKind.EMPTY_RESPONSE
-            )
+            raise ConnectorError(f"Leere Antwort von {url}", kind=ErrorKind.EMPTY_RESPONSE)
         try:
             return response.json()
         except ValueError as exc:

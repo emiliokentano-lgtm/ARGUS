@@ -378,7 +378,11 @@ services:
       # Der Health-Endpunkt meldet auch den Zustand der Grafana-Datenbank.
       # Ein Grafana, das antwortet aber seine Datenbank nicht erreicht, ist
       # nicht gesund.
-      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health | grep -q '\"database\"' && wget -q -O- http://127.0.0.1:3000/api/health | grep -q ok"]
+      test:
+        [
+          "CMD-SHELL",
+          'wget -q -O- http://127.0.0.1:3000/api/health | grep -q ''"database"'' && wget -q -O- http://127.0.0.1:3000/api/health | grep -q ok',
+        ]
       interval: 15s
       timeout: 5s
       retries: 8

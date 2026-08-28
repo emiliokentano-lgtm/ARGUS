@@ -1,0 +1,100 @@
+# ARGUS — Git-Hooks.
+#
+# Ausschliesslich lokale Hooks (`repo: local`). Das ist Absicht:
+#
+#   * Sie benutzen dieselben Werkzeugversionen wie die CI - die aus uv.lock
+#     und pnpm-lock.yaml. Ein Hook, der seine eigene Ruff-Version aus einem
+#     fremden Repository zieht, meldet frueher oder spaeter etwas anderes als
+#     die Pipeline, und dann glaubt niemand mehr dem Hook.
+#   * Sie brauchen keinen Netzzugriff beim Einrichten.
+#
+# Einrichten: make bootstrap  (ruft pre-commit install auf)
+# Einmal ueber alles:  .venv/bin/pre-commit run --all-files
+
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  - repo: local
+    hooks:
+      # --- Allgemein ----------------------------------------------------
+      - id: no-large-files
+        name: Keine grossen Dateien
+        entry: python3 scripts/hooks/check_large_files.py
+        language: system
+        stages: [pre-commit]
+
+      - id: no-secrets
+        name: Keine offensichtlichen Zugangsdaten
+        entry: python3 scripts/hooks/check_secrets.py
+        language: system
+        stages: [pre-commit]
+        exclude: '^(infra/compose/\.env\.example|.*\.lock|pnpm-lock\.yaml|uv\.lock)$'
+
+      - id: conventional-commit
+        name: Commit-Format (Conventional Commits)
+        entry: python3 scripts/hooks/check_commit_message.py
+        language: system
+        stages: [commit-msg]
+
+      # --- Python -------------------------------------------------------
+      - id: ruff-check
+        name: Ruff (Linting)
+        entry: .venv/bin/ruff check --force-exclude --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: ruff-format
+        name: Ruff (Formatierung)
+        entry: .venv/bin/ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: mypy
+        name: mypy
+        # Kein pass_filenames: mypy braucht den ganzen Baum, um Typen ueber
+        # Modulgrenzen aufzuloesen. Eine Datei allein zu pruefen erzeugt
+        # Fehlalarme.
+        entry: .venv/bin/mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
+
+      # --- TypeScript ---------------------------------------------------
+      - id: prettier
+        name: Prettier
+        entry: pnpm exec prettier --write --ignore-unknown
+        language: system
+        types_or: [ts, tsx, javascript, jsx, json, yaml, markdown, css]
+
+      - id: eslint
+        name: ESLint
+        entry: pnpm exec eslint --fix
+        language: system
+        types_or: [ts, tsx]
+
+      # --- Go -----------------------------------------------------------
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+
+      - id: go-vet
+        name: go vet
+        entry: python3 scripts/hooks/go_vet.py
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # --- Protobuf -----------------------------------------------------
+      - id: buf-lint
+        name: buf lint und format
+        entry: python3 scripts/hooks/buf_check.py
+        language: system
+        files: '^packages/schemas/proto/.*\.proto$'
+        pass_filenames: false

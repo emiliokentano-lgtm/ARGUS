@@ -38,15 +38,15 @@ def timescale_mode() -> str:
     """
     mode = os.environ.get(TIMESCALE_ENV, "auto").strip().lower()
     if mode not in ("auto", "on", "off"):
-        raise RuntimeError(
-            f"{TIMESCALE_ENV}={mode!r} ist ungueltig. Erlaubt: auto, on, off."
-        )
+        raise RuntimeError(f"{TIMESCALE_ENV}={mode!r} ist ungueltig. Erlaubt: auto, on, off.")
     if mode == "off":
         return "off"
 
-    available = op.get_bind().execute(
-        text("SELECT count(*) FROM pg_available_extensions WHERE name = 'timescaledb'")
-    ).scalar_one()
+    available = (
+        op.get_bind()
+        .execute(text("SELECT count(*) FROM pg_available_extensions WHERE name = 'timescaledb'"))
+        .scalar_one()
+    )
 
     if available:
         return "on"
@@ -62,8 +62,7 @@ def timescale_mode() -> str:
             "  * Oder ohne TimescaleDB migrieren - 'observations' wird dann eine\n"
             "    nativ nach observed_at partitionierte Tabelle, ohne automatische\n"
             "    Kompression:\n"
-            "        ARGUS_TIMESCALE=off alembic upgrade head\n"
-            + "=" * 78
+            "        ARGUS_TIMESCALE=off alembic upgrade head\n" + "=" * 78
         )
 
     sys.stderr.write(
@@ -82,11 +81,7 @@ def timescale_active() -> bool:
     """
     return bool(
         op.get_bind()
-        .execute(
-            text(
-                "SELECT count(*) FROM pg_extension WHERE extname = 'timescaledb'"
-            )
-        )
+        .execute(text("SELECT count(*) FROM pg_extension WHERE extname = 'timescaledb'"))
         .scalar_one()
     )
 
@@ -120,9 +115,7 @@ def guard_destructive_downgrade(*tables: str) -> None:
         if not name:
             schema, name = "argus", schema
         exists = bind.execute(
-            text(
-                "SELECT to_regclass(:qualified) IS NOT NULL"
-            ),
+            text("SELECT to_regclass(:qualified) IS NOT NULL"),
             {"qualified": f"{schema}.{name}"},
         ).scalar_one()
         if not exists:
@@ -138,13 +131,10 @@ def guard_destructive_downgrade(*tables: str) -> None:
 
     details = "\n".join(f"    {name}: {count} Zeilen" for name, count in populated)
     raise RuntimeError(
-        "\n"
-        + "=" * 78
-        + "\nARGUS: Dieser Rollback wuerde Tabellen mit Daten loeschen:\n\n"
+        "\n" + "=" * 78 + "\nARGUS: Dieser Rollback wuerde Tabellen mit Daten loeschen:\n\n"
         f"{details}\n\n"
         "Wenn das beabsichtigt ist, ausdruecklich erlauben:\n"
         f"    {DESTRUCTIVE_ENV}=1 alembic downgrade <ziel>\n\n"
         "Vorher sichern:\n"
-        "    pg_dump --format=custom --file=argus-vor-rollback.dump \"$DATABASE_URL\"\n"
-        + "=" * 78
+        '    pg_dump --format=custom --file=argus-vor-rollback.dump "$DATABASE_URL"\n' + "=" * 78
     )

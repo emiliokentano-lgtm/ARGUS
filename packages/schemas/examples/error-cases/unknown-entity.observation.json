@@ -13,7 +13,12 @@
   "ingested_at": "2026-08-28T09:20:12.640Z",
   "source": { "id": "aisstream", "reliability": "SOURCE_RELIABILITY_B" },
   "kind": "OBSERVATION_KIND_POSITION",
-  "geo": { "lat": 26.5501, "lon": 56.2481, "h3_r7": "871f0d4c0ffffff", "precision": "GEO_PRECISION_EXACT" },
+  "geo": {
+    "lat": 26.5501,
+    "lon": 56.2481,
+    "h3_r7": "871f0d4c0ffffff",
+    "precision": "GEO_PRECISION_EXACT"
+  },
   "quality": { "time_quality": "TIME_QUALITY_SOURCE_PROVIDED", "flags": ["unknown_mmsi_block"] },
   "raw_ref": "s3://argus-bronze/aisstream/2026/08/28/09/part-0031.jsonl#L901",
   "dedupe_key": "aisstream:mmsi:970010101:2026-08-28T09:20:11.000Z"

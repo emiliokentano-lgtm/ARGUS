@@ -33,7 +33,7 @@ from argus_connector.dedupe import DedupeKeyBuilder
 from argus_connector.drift import DriftReport, SchemaDriftDetector
 from argus_connector.metrics import ConnectorMetrics
 from argus_connector.ratelimit import AdaptiveRateLimiter, TokenBucket
-from argus_connector.retry import CircuitBreaker, CircuitOpen, RetryPolicy, retry_async
+from argus_connector.retry import CircuitBreaker, CircuitOpenError, RetryPolicy, retry_async
 from argus_connector.runner import ConnectorRunner, RunnerState
 
 __all__ = [
@@ -43,7 +43,7 @@ __all__ = [
     "CanonicalMessage",
     "ChainedCursorStore",
     "CircuitBreaker",
-    "CircuitOpen",
+    "CircuitOpenError",
     "Connector",
     "ConnectorMetrics",
     "ConnectorMode",

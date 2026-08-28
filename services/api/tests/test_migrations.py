@@ -6,14 +6,12 @@ downgrade nicht den Bestand der uebrigen Tests loescht.
 
 from __future__ import annotations
 
-import os
 import uuid
 
 import psycopg
 import pytest
-from psycopg import sql
-
 from conftest import requires_db, run_alembic
+from psycopg import sql
 
 pytestmark = requires_db
 
@@ -56,7 +54,7 @@ def scratch_db(db_url: str):
 def _with_dbname(url: str, name: str) -> str:
     head, _, tail = url.partition("://")
     creds, _, rest = tail.partition("/")
-    path, sep, query = rest.partition("?")
+    _path, sep, query = rest.partition("?")
     return f"{head}://{creds}/{name}{sep}{query}"
 
 
@@ -128,7 +126,8 @@ def test_downgrade_refuses_to_drop_populated_tables(scratch_db):
         assert conn.execute("SELECT count(*) FROM argus.entities").fetchone()[0] == 1
 
     allowed = run_alembic(
-        "downgrade", "0001",
+        "downgrade",
+        "0001",
         env_extra={**env, "ARGUS_ALLOW_DESTRUCTIVE_DOWNGRADE": "1"},
     )
     assert allowed.returncode == 0, allowed.stderr
@@ -151,7 +150,10 @@ def test_migration_on_foreign_populated_database_is_refused(scratch_db):
     assert "alembic stamp head" in result.stderr
 
     forced = run_alembic(
-        "-x", "force_existing=1", "upgrade", "head",
+        "-x",
+        "force_existing=1",
+        "upgrade",
+        "head",
         env_extra={"DATABASE_URL": scratch_db},
     )
     assert forced.returncode == 0, forced.stderr
@@ -189,7 +191,8 @@ def test_timescale_required_but_unavailable_gives_guidance(scratch_db):
         pytest.skip("TimescaleDB ist verfuegbar - dieser Fehlerfall tritt hier nicht auf")
 
     result = run_alembic(
-        "upgrade", "head",
+        "upgrade",
+        "head",
         env_extra={"DATABASE_URL": scratch_db, "ARGUS_TIMESCALE": "on"},
     )
     assert result.returncode != 0

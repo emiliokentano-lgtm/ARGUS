@@ -180,10 +180,12 @@ def upgrade() -> None:
     op.execute(
         "COMMENT ON TABLE argus.score_factors IS "
         "'Zerlegung eines Scores. Eigene Tabelle statt JSONB, weil die Frage "
-        "\"welcher Faktor dominiert\" relational beantwortet werden muss "
+        '"welcher Faktor dominiert" relational beantwortet werden muss '
         "(Kapitel 7.3).'"
     )
-    op.execute("CREATE INDEX scores_object_idx ON argus.scores (object_kind, object_id, computed_at DESC)")
+    op.execute(
+        "CREATE INDEX scores_object_idx ON argus.scores (object_kind, object_id, computed_at DESC)"
+    )
     op.execute("CREATE INDEX scores_priority_idx ON argus.scores (priority DESC, computed_at DESC)")
 
     # ------------------------------------------------------------------
@@ -261,7 +263,9 @@ def upgrade() -> None:
         "ALTER TABLE argus.assessments ADD CONSTRAINT assessments_superseded_by_fk "
         "FOREIGN KEY (superseded_by) REFERENCES argus.assessments (assessment_id) ON DELETE SET NULL"
     )
-    op.execute("CREATE INDEX assessments_subject_idx ON argus.assessments (subject_kind, subject_id)")
+    op.execute(
+        "CREATE INDEX assessments_subject_idx ON argus.assessments (subject_kind, subject_id)"
+    )
     op.execute("CREATE INDEX assessments_kind_idx ON argus.assessments (kind, ingested_at DESC)")
     op.execute("CREATE INDEX assessments_author_idx ON argus.assessments (author_type, author_id)")
     op.execute(
@@ -345,12 +349,20 @@ def upgrade() -> None:
         "CREATE UNIQUE INDEX alerts_open_dedupe_idx ON argus.alerts (dedupe_key) "
         "WHERE status IN ('new', 'acked', 'investigating')"
     )
-    op.execute("CREATE INDEX alerts_queue_idx ON argus.alerts (status, severity DESC, last_seen_at DESC)")
-    op.execute("CREATE INDEX alerts_assignee_idx ON argus.alerts (assignee_id) WHERE assignee_id IS NOT NULL")
-    op.execute("CREATE INDEX alerts_entity_idx ON argus.alerts (entity_id) WHERE entity_id IS NOT NULL")
+    op.execute(
+        "CREATE INDEX alerts_queue_idx ON argus.alerts (status, severity DESC, last_seen_at DESC)"
+    )
+    op.execute(
+        "CREATE INDEX alerts_assignee_idx ON argus.alerts (assignee_id) WHERE assignee_id IS NOT NULL"
+    )
+    op.execute(
+        "CREATE INDEX alerts_entity_idx ON argus.alerts (entity_id) WHERE entity_id IS NOT NULL"
+    )
     op.execute("CREATE INDEX alerts_rule_idx ON argus.alerts (rule_id, ingested_at DESC)")
     op.execute("CREATE INDEX alerts_geo_idx ON argus.alerts USING gist (geo) WHERE geo IS NOT NULL")
-    op.execute("CREATE INDEX alerts_expiry_idx ON argus.alerts (expires_at) WHERE expires_at IS NOT NULL")
+    op.execute(
+        "CREATE INDEX alerts_expiry_idx ON argus.alerts (expires_at) WHERE expires_at IS NOT NULL"
+    )
 
     op.execute(
         """
@@ -465,14 +477,25 @@ def upgrade() -> None:
         "statt durch Interpolation kaschiert zu werden (Prinzip 4).'"
     )
     op.execute("CREATE INDEX data_gaps_source_idx ON argus.data_gaps (source_id, gap_start DESC)")
-    op.execute("CREATE INDEX data_gaps_open_idx ON argus.data_gaps (gap_start DESC) WHERE gap_end IS NULL")
+    op.execute(
+        "CREATE INDEX data_gaps_open_idx ON argus.data_gaps (gap_start DESC) WHERE gap_end IS NULL"
+    )
 
 
 def downgrade() -> None:
     guard_destructive_downgrade(
-        "data_gaps", "case_notes", "case_items", "cases", "alert_notifications",
-        "alerts", "assessments", "score_factors", "scores", "watchlist_members",
-        "watchlists", "aois",
+        "data_gaps",
+        "case_notes",
+        "case_items",
+        "cases",
+        "alert_notifications",
+        "alerts",
+        "assessments",
+        "score_factors",
+        "scores",
+        "watchlist_members",
+        "watchlists",
+        "aois",
     )
     op.execute("DROP TABLE IF EXISTS argus.data_gaps")
     op.execute("ALTER TABLE argus.alerts DROP CONSTRAINT IF EXISTS alerts_case_fk")

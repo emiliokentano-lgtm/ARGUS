@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from conftest import requires_postgres, requires_valkey
 
 from argus_connector.cursor import (
     ChainedCursorStore,
@@ -19,7 +20,6 @@ from argus_connector.cursor import (
     PostgresCursorStore,
     ValkeyCursorStore,
 )
-from conftest import requires_postgres, requires_valkey
 
 
 class TestCursorSerialisation:
@@ -170,7 +170,7 @@ class TestChainedStore:
     async def test_falls_back_to_durable_when_cache_is_empty(self, chained):
         """Ein geleerter Cache darf nie bedeuten, dass ein Konnektor von vorn
         anfaengt."""
-        store, fast, durable = chained
+        store, _fast, durable = chained
         connector_id = f"chain-{uuid.uuid4().hex[:8]}"
         await durable.save(Cursor(connector_id, "nur-dauerhaft", sequence=9))
         loaded = await store.load(connector_id)

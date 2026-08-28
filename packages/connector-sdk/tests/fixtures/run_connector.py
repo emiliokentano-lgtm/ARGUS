@@ -37,11 +37,11 @@ class AppendingPublisher:
     async def connect(self) -> None:
         self._handle = self._path.open("a", encoding="utf-8")
 
-    async def publish(self, subject, payload, *, dedupe_key) -> bool:  # noqa: ANN001
+    async def publish(self, subject, payload, *, dedupe_key) -> bool:
         self._handle.write(f"{payload['id']}\t{dedupe_key}\n")
         return True
 
-    async def publish_batch(self, messages) -> PublishResult:  # noqa: ANN001
+    async def publish_batch(self, messages) -> PublishResult:
         for subject, payload, dedupe_key in messages:
             await self.publish(subject, payload, dedupe_key=dedupe_key)
         # Erst nach dem Flush gilt der Batch als zugestellt - genau wie eine
@@ -72,8 +72,7 @@ class PagedConnector(BaseConnector):
             params={"cursor": int(cursor or 0), "limit": self._page},
         )
         records = [
-            RawRecord(payload=item, source_timestamp=float(item["ts"]))
-            for item in data["records"]
+            RawRecord(payload=item, source_timestamp=float(item["ts"])) for item in data["records"]
         ]
         return FetchResult(
             records=records,
@@ -118,9 +117,7 @@ async def main() -> int:
     runner = ConnectorRunner(
         connector,
         settings=settings,
-        cursor_store=PostgresCursorStore(
-            os.environ["CURSOR_DSN"], schema="argus_connector_test"
-        ),
+        cursor_store=PostgresCursorStore(os.environ["CURSOR_DSN"], schema="argus_connector_test"),
         publisher=AppendingPublisher(Path(os.environ["OUTPUT_FILE"])),
         bronze=bronze,
     )

@@ -122,9 +122,7 @@ class TestClockSkew:
         assert connector.last_clock_skew_s > 60 * 60 * 24
 
     async def test_missing_date_header_is_not_an_error(self, settings):
-        connector = _connector(
-            settings, lambda request: httpx.Response(200, json={"ok": True})
-        )
+        connector = _connector(settings, lambda request: httpx.Response(200, json={"ok": True}))
         await connector.get_json("/x")
         assert connector.last_clock_skew_s is None
 
@@ -170,7 +168,8 @@ class TestTimestampParsing:
     def test_naive_datetime_is_treated_as_utc(self):
         """ARGUS rechnet in UTC. Ein Zeitstempel ohne Zone ist UTC, nicht
         Ortszeit - alles andere waere eine stille Verschiebung."""
-        naive = datetime(2026, 8, 28, 9, 14, 3)
+        # Absichtlich ohne Zeitzone: genau dieser Fall wird geprueft.
+        naive = datetime(2026, 8, 28, 9, 14, 3)  # noqa: DTZ001
         aware = datetime(2026, 8, 28, 9, 14, 3, tzinfo=UTC)
         assert BaseConnector.to_epoch(naive) == BaseConnector.to_epoch(aware)
 

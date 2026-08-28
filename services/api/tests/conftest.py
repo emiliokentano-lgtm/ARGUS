@@ -43,6 +43,9 @@ def run_alembic(*args: str, env_extra: dict[str, str] | None = None) -> subproce
         env=env,
         capture_output=True,
         text=True,
+        # Der Rueckgabewert wird im Test geprueft - ein Fehlschlag ist
+        # oft genau das, was der Test erwartet.
+        check=False,
     )
 
 

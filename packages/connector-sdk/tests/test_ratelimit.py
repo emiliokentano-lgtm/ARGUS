@@ -78,14 +78,14 @@ class TestRetryAfter:
 
 class TestAdaptiveRateLimiter:
     def _limiter(self, clock, **kwargs):
-        defaults = dict(
-            requests_per_second=10.0,
-            burst=10,
-            backoff_factor=0.5,
-            recovery_step=0.25,
-            recovery_interval_s=30.0,
-            min_requests_per_second=0.5,
-        )
+        defaults: dict[str, object] = {
+            "requests_per_second": 10.0,
+            "burst": 10,
+            "backoff_factor": 0.5,
+            "recovery_step": 0.25,
+            "recovery_interval_s": 30.0,
+            "min_requests_per_second": 0.5,
+        }
         defaults.update(kwargs)
         return AdaptiveRateLimiter(clock=clock, sleep=clock.sleep, **defaults)
 

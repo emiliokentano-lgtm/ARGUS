@@ -41,8 +41,7 @@ def get_url() -> str:
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         sys.stderr.write(
-            "\nDATABASE_URL ist nicht gesetzt.\n"
-            f"Beispiel: export DATABASE_URL='{DEFAULT_URL}'\n\n"
+            f"\nDATABASE_URL ist nicht gesetzt.\nBeispiel: export DATABASE_URL='{DEFAULT_URL}'\n\n"
         )
         raise SystemExit(2)
     # psycopg3 ist der Treiber; eine alte psycopg2-URL wird still korrigiert.
@@ -54,14 +53,11 @@ def get_url() -> str:
 def check_extensions(connection) -> None:
     """Fehlerfall 'fehlende Extension' - mit Handlungsanweisung statt Stacktrace."""
     installed = {
-        row[0]
-        for row in connection.execute(text("SELECT extname FROM pg_extension")).fetchall()
+        row[0] for row in connection.execute(text("SELECT extname FROM pg_extension")).fetchall()
     }
     available = {
         row[0]
-        for row in connection.execute(
-            text("SELECT name FROM pg_available_extensions")
-        ).fetchall()
+        for row in connection.execute(text("SELECT name FROM pg_available_extensions")).fetchall()
     }
     missing = [e for e in REQUIRED_EXTENSIONS if e not in installed]
     if not missing:
@@ -119,9 +115,7 @@ def guard_foreign_database(connection) -> None:
     ).one()
     if row.argus_tables > 0 and row.version_table == 0:
         sys.stderr.write(
-            "\n"
-            + "=" * 78
-            + "\nARGUS: Das Schema 'argus' enthaelt bereits "
+            "\n" + "=" * 78 + "\nARGUS: Das Schema 'argus' enthaelt bereits "
             f"{row.argus_tables} Tabellen, aber es gibt keine\n"
             "alembic_version-Tabelle. Diese Datenbank wurde nicht von Alembic\n"
             "angelegt.\n\n"
@@ -131,9 +125,7 @@ def guard_foreign_database(connection) -> None:
             "        alembic stamp head\n"
             "  * Falsche Datenbank in DATABASE_URL.\n"
             "  * Absicht (Testumgebung): erzwingen mit\n"
-            "        alembic -x force_existing=1 upgrade head\n"
-            + "=" * 78
-            + "\n\n"
+            "        alembic -x force_existing=1 upgrade head\n" + "=" * 78 + "\n\n"
         )
         raise SystemExit(4)
 

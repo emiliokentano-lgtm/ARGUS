@@ -8,17 +8,85 @@
     "und braucht einen CHANGELOG-Eintrag."
   ],
 
-  "argus.v1.Observation": ["obs_id", "schema_version", "ingested_at", "source", "entity_ref", "dedupe_key"],
-  "argus.v1.Event": ["event_id", "schema_version", "ingested_at", "source", "type", "title", "occurred_at", "status"],
-  "argus.v1.Entity": ["entity_id", "schema_version", "ingested_at", "source", "type", "display_name"],
-  "argus.v1.Relation": ["relation_id", "schema_version", "ingested_at", "source", "type", "from", "to", "validity"],
+  "argus.v1.Observation": [
+    "obs_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "entity_ref",
+    "dedupe_key"
+  ],
+  "argus.v1.Event": [
+    "event_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "type",
+    "title",
+    "occurred_at",
+    "status"
+  ],
+  "argus.v1.Entity": [
+    "entity_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "type",
+    "display_name"
+  ],
+  "argus.v1.Relation": [
+    "relation_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "type",
+    "from",
+    "to",
+    "validity"
+  ],
   "argus.v1.Report": ["report_id", "schema_version", "ingested_at", "source", "kind", "title"],
-  "argus.v1.Track": ["track_id", "schema_version", "ingested_at", "source", "entity_ref", "time_range"],
-  "argus.v1.Assessment": ["assessment_id", "schema_version", "ingested_at", "source", "kind", "subject", "statement", "confidence", "author"],
-  "argus.v1.Source": ["source_id", "schema_version", "ingested_at", "source", "name", "kind", "reliability", "license"],
+  "argus.v1.Track": [
+    "track_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "entity_ref",
+    "time_range"
+  ],
+  "argus.v1.Assessment": [
+    "assessment_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "kind",
+    "subject",
+    "statement",
+    "confidence",
+    "author"
+  ],
+  "argus.v1.Source": [
+    "source_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "name",
+    "kind",
+    "reliability",
+    "license"
+  ],
   "argus.v1.Aoi": ["aoi_id", "schema_version", "ingested_at", "source", "name", "kind", "scoring"],
   "argus.v1.Watchlist": ["watchlist_id", "schema_version", "ingested_at", "source", "name"],
-  "argus.v1.Alert": ["alert_id", "schema_version", "ingested_at", "source", "rule_id", "severity", "status", "title", "dedupe_key"],
+  "argus.v1.Alert": [
+    "alert_id",
+    "schema_version",
+    "ingested_at",
+    "source",
+    "rule_id",
+    "severity",
+    "status",
+    "title",
+    "dedupe_key"
+  ],
   "argus.v1.Case": ["case_id", "schema_version", "ingested_at", "source", "title", "status"],
 
   "argus.v1.Provenance": ["id", "reliability"],

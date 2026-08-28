@@ -7,15 +7,16 @@ Rate-Limiter, Retry, Circuit Breaker, Retry-After-Auswertung.
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 import httpx
 import pytest
+from fixtures.mock_source import MockSource
 from prometheus_client import CollectorRegistry
 
 from argus_connector.base import BaseConnector, CanonicalMessage, FetchResult, RawRecord
 from argus_connector.metrics import ConnectorMetrics
-from fixtures.mock_source import MockSource
 
 pytestmark = pytest.mark.integration
 
@@ -38,9 +39,7 @@ class SimpleConnector(BaseConnector):
         )
 
     def normalize(self, raw):
-        return [
-            CanonicalMessage("t", raw.payload, self.dedupe_key_for(raw.payload))
-        ]
+        return [CanonicalMessage("t", raw.payload, self.dedupe_key_for(raw.payload))]
 
 
 def _connector(settings, source_url: str, **overrides):
@@ -76,9 +75,7 @@ async def test_throttling_is_measurable_in_elapsed_time(settings):
     with MockSource(total=200) as source:
         # Hohes Erholungsintervall: sonst holt sich die Rate waehrend der
         # Messung schon wieder hoch und der Effekt verschwindet im Rauschen.
-        connector, _ = _connector(
-            settings, source.url, rps=50.0, burst=1, recovery_interval=60.0
-        )
+        connector, _ = _connector(settings, source.url, rps=50.0, burst=1, recovery_interval=60.0)
         try:
             started = time.monotonic()
             for cursor in range(0, 50, 10):
@@ -116,9 +113,7 @@ async def test_retry_after_header_is_honoured(settings):
         finally:
             await connector.close()
 
-    assert elapsed >= 1.0, (
-        f"Retry-After: 1 wurde nicht eingehalten (nur {elapsed:.3f} s gewartet)"
-    )
+    assert elapsed >= 1.0, f"Retry-After: 1 wurde nicht eingehalten (nur {elapsed:.3f} s gewartet)"
 
 
 async def test_connector_recovers_after_throttling(settings):
@@ -133,7 +128,7 @@ async def test_connector_recovers_after_throttling(settings):
             assert throttled_rate < 20.0
 
             for cursor in range(0, 100, 10):
-                time.sleep(0.06)  # Erholungsintervall verstreichen lassen
+                await asyncio.sleep(0.06)  # Erholungsintervall verstreichen lassen
                 result = await connector.fetch(cursor)
                 assert len(result.records) == 10, "die Quelle liefert wieder"
 
@@ -198,6 +193,9 @@ async def test_clock_skew_is_measured_from_the_date_header(settings):
 
     assert connector.last_clock_skew_s is not None
     assert abs(connector.last_clock_skew_s) < 5.0, "lokale Quelle, kein echter Versatz"
-    assert metrics.registry.get_sample_value(
-        "connector_clock_skew_seconds", {"connector": "throttle-test", "source": "mock"}
-    ) is not None
+    assert (
+        metrics.registry.get_sample_value(
+            "connector_clock_skew_seconds", {"connector": "throttle-test", "source": "mock"}
+        )
+        is not None
+    )

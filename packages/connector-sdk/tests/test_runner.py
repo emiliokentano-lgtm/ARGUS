@@ -11,11 +11,10 @@ from prometheus_client import CollectorRegistry
 
 from argus_connector.base import BaseConnector, CanonicalMessage, FetchResult, RawRecord
 from argus_connector.bronze import BronzeWriter
-from argus_connector.bus import BusUnavailable, MemoryPublisher
+from argus_connector.bus import BusUnavailableError, MemoryPublisher
 from argus_connector.cursor import MemoryCursorStore
 from argus_connector.metrics import ConnectorMetrics
 from argus_connector.runner import ConnectorRunner, RunnerState
-
 
 # Bewusst in der Vergangenheit: der Lag ist "jetzt minus observed_at" und
 # waere bei einem Zeitstempel aus der Zukunft definitionsgemaess 0.
@@ -65,7 +64,7 @@ class RecordingStore:
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
 
-    async def put(self, key, body, *, content_type):  # noqa: ANN001
+    async def put(self, key, body, *, content_type):
         self.objects[key] = body
 
     async def close(self) -> None:
@@ -80,7 +79,10 @@ def parts(settings, tmp_path):
     publisher = MemoryPublisher()
     object_store = RecordingStore()
     bronze = BronzeWriter(
-        object_store, source_id="test-source", max_records=1000, compress=False,
+        object_store,
+        source_id="test-source",
+        max_records=1000,
+        compress=False,
         spool_dir=tmp_path / "spool",
     )
     runner = ConnectorRunner(
@@ -96,7 +98,7 @@ def parts(settings, tmp_path):
 
 class TestBatchOrder:
     async def test_full_run_publishes_everything(self, parts):
-        runner, connector, _, publisher, _, _, _ = parts
+        runner, _connector, _, publisher, _, _, _ = parts
         await runner.run(max_batches=3)
         assert len(publisher.messages) == 30
         assert [m[1]["id"] for m in publisher.messages] == list(range(30))
@@ -152,7 +154,7 @@ class TestBatchOrder:
         runner, _, store, publisher, _, _, _ = parts
 
         async def failing(_messages):
-            raise BusUnavailable("Bus weg")
+            raise BusUnavailableError("Bus weg")
 
         publisher.publish_batch = failing
         await runner.run(max_batches=1)
@@ -175,10 +177,14 @@ class TestBatchOrder:
         publisher = MemoryPublisher()
 
         async def build_runner():
-            metrics = ConnectorMetrics("test-connector", "test-source", registry=CollectorRegistry())
+            metrics = ConnectorMetrics(
+                "test-connector", "test-source", registry=CollectorRegistry()
+            )
             connector = CountingConnector(settings, metrics=metrics)
             bronze = BronzeWriter(
-                RecordingStore(), source_id="test-source", compress=False,
+                RecordingStore(),
+                source_id="test-source",
+                compress=False,
                 spool_dir=tmp_path / "spool",
             )
             return ConnectorRunner(
@@ -270,7 +276,7 @@ class TestKillSwitch:
 class TestShutdown:
     async def test_shutdown_flushes_bronze(self, parts):
         """SIGTERM mitten im Betrieb darf keine Rohdaten kosten."""
-        runner, _, _, _, bronze, object_store, _ = parts
+        runner, _, _, _, _bronze, object_store, _ = parts
         await runner.run(max_batches=1)
         assert object_store.objects, "der Bronze-Puffer muss geschrieben sein"
 
@@ -290,7 +296,7 @@ class TestShutdown:
 
     async def test_shutdown_waits_for_the_running_batch(self, parts):
         """Der laufende Batch wird zu Ende gefuehrt, nicht abgeschnitten."""
-        runner, _, store, publisher, _, _, _ = parts
+        runner, _, store, publisher, _bronze, _, _ = parts
         slow_release = asyncio.Event()
         original = publisher.publish_batch
 
@@ -318,9 +324,7 @@ class TestMetrics:
         runner, _, _, _, _, _, metrics = parts
         await runner.run(max_batches=1)
         exported = {
-            sample.name
-            for metric in metrics.registry.collect()
-            for sample in metric.samples
+            sample.name for metric in metrics.registry.collect() for sample in metric.samples
         }
         for required in (
             "connector_messages_total",

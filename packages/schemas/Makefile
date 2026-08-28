@@ -6,7 +6,7 @@
 SHELL := /bin/sh
 BUF   := ./node_modules/.bin/buf
 TSC   := ./node_modules/.bin/tsc
-PY    := .venv/bin/python
+PY    := ../../.venv/bin/python
 
 DESCRIPTOR := build/descriptor.binpb
 BASELINE   := baseline/argus-v1.binpb
@@ -14,11 +14,13 @@ BASELINE   := baseline/argus-v1.binpb
 .DEFAULT_GOAL := check
 .PHONY: check setup gen lint breaking baseline descriptor jsonschema test typecheck clean help
 
-## setup: Werkzeuge installieren (npm + Python-Venv)
+## setup: Werkzeuge installieren
+#
+# Seit dem Monorepo-Umbau kommt Python aus dem Workspace an der Wurzel
+# (.venv) und Node aus dem pnpm-Workspace. Dieses Ziel ruft nur noch
+# 'make bootstrap' auf, damit niemand zwei Umgebungen pflegt.
 setup:
-	npm ci --no-audit --no-fund || npm install --no-audit --no-fund
-	uv venv .venv
-	uv pip install --python $(PY) grpcio-tools protobuf jsonschema pytest
+	@$(MAKE) -C ../.. bootstrap
 
 ## lint: buf lint (Stilregeln, Kommentarpflicht auf Message- und Enum-Ebene)
 lint:

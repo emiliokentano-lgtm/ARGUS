@@ -38,7 +38,11 @@
           "asserted_at": "2026-08-28T14:41:00Z",
           "confidence": 0.7,
           "evidence": [
-            { "kind": "EVIDENCE_KIND_REPORT", "ref": "01HZY4T5V6REPORT0000000021", "quote": "vier Verletzte" }
+            {
+              "kind": "EVIDENCE_KIND_REPORT",
+              "ref": "01HZY4T5V6REPORT0000000021",
+              "quote": "vier Verletzte"
+            }
           ]
         },
         {
@@ -47,7 +51,11 @@
           "asserted_at": "2026-08-28T14:52:00Z",
           "confidence": 0.35,
           "evidence": [
-            { "kind": "EVIDENCE_KIND_REPORT", "ref": "01HZY4T5V6REPORT0000000022", "quote": "elf Verletzte" }
+            {
+              "kind": "EVIDENCE_KIND_REPORT",
+              "ref": "01HZY4T5V6REPORT0000000022",
+              "quote": "elf Verletzte"
+            }
           ]
         }
       ],

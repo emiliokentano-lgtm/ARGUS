@@ -32,7 +32,7 @@ MAX_DEPTH = 6
 REQUIRED_RATIO = 0.95
 
 
-class DriftKind(str, enum.Enum):
+class DriftKind(enum.StrEnum):
     NEW_FIELD = "new_field"
     MISSING_FIELD = "missing_field"
     TYPE_CHANGE = "type_change"
@@ -185,8 +185,9 @@ class SchemaDriftDetector:
         for path, type_name in observed.items():
             known = self.shape.get(path)
             if known is None:
-                self._add(report, DriftKind.NEW_FIELD, path,
-                          f"unbekanntes Feld vom Typ {type_name}")
+                self._add(
+                    report, DriftKind.NEW_FIELD, path, f"unbekanntes Feld vom Typ {type_name}"
+                )
                 continue
             if type_name == known:
                 continue
@@ -204,8 +205,9 @@ class SchemaDriftDetector:
             self._add(report, kind, path, f"war {known}, ist jetzt {type_name}")
 
         for path in required - observed.keys():
-            self._add(report, DriftKind.MISSING_FIELD, path,
-                      "bisher immer vorhanden, jetzt nicht mehr")
+            self._add(
+                report, DriftKind.MISSING_FIELD, path, "bisher immer vorhanden, jetzt nicht mehr"
+            )
 
         self.samples_seen += 1
         return report

@@ -209,7 +209,9 @@ def upgrade() -> None:
         "CREATE INDEX entities_purge_after_idx ON argus.entities (purge_after) "
         "WHERE purge_after IS NOT NULL"
     )
-    op.execute("CREATE INDEX entities_history_id_period_idx ON argus.entities_history USING gist (entity_id, sys_period)")
+    op.execute(
+        "CREATE INDEX entities_history_id_period_idx ON argus.entities_history USING gist (entity_id, sys_period)"
+    )
 
     # ------------------------------------------------------------------
     # entity_aliases — alle externen Bezeichner und Namensvarianten
@@ -294,7 +296,9 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX entity_sanctions_list_idx ON argus.entity_sanctions (list_id, listing_id)")
+    op.execute(
+        "CREATE INDEX entity_sanctions_list_idx ON argus.entity_sanctions (list_id, listing_id)"
+    )
     op.execute(
         "CREATE INDEX entity_sanctions_active_idx ON argus.entity_sanctions (entity_id) "
         "WHERE delisted_at IS NULL"

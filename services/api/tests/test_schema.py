@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import psycopg
 import pytest
-
 from conftest import requires_db
 
 pytestmark = requires_db
 
 
 # --- Invarianten ------------------------------------------------------------
+
 
 def test_schema_invariants_hold(conn):
     """Zeitzonenfalle und Fremdschluessel ohne ON DELETE sind ausgeschlossen."""
@@ -54,9 +54,7 @@ def test_observations_is_partitioned_by_time(conn):
             """
         )
         native_partitions = cur.fetchone()[0]
-        cur.execute(
-            "SELECT count(*) FROM pg_extension WHERE extname = 'timescaledb'"
-        )
+        cur.execute("SELECT count(*) FROM pg_extension WHERE extname = 'timescaledb'")
         has_timescale = cur.fetchone()[0] > 0
     assert native_partitions > 0 or has_timescale, (
         "observations ist weder Hypertable noch nativ partitioniert"
@@ -79,6 +77,7 @@ def test_entity_time_index_exists(conn):
 
 
 # --- Alias-Eindeutigkeit ----------------------------------------------------
+
 
 def test_duplicate_alias_is_rejected(conn):
     """Derselbe Bezeichner darf nie auf zwei Entitaeten zeigen."""
@@ -115,6 +114,7 @@ def test_same_value_different_id_type_is_allowed(conn):
 
 
 # --- Geo-Praezision ---------------------------------------------------------
+
 
 def _insert_source(cur, source_id="testsource"):
     cur.execute(
@@ -177,6 +177,7 @@ def test_exact_precision_point_needs_no_flag(conn):
 
 # --- Beobachtungen ----------------------------------------------------------
 
+
 def _insert_observation(cur, **overrides):
     values = {
         "obs_id": "01OBSTEST",
@@ -188,7 +189,10 @@ def _insert_observation(cur, **overrides):
         "kind": "'position'",
         "geo": "'SRID=4326;POINT(56.26 25.94)'",
     }
-    values.update({k: v for k, v in overrides.items()})
+    values.update(overrides)
+    # Die eingesetzten Werte stammen ausschliesslich aus dieser Datei. Ein
+    # Test, der sie als Parameter uebergibt, koennte die CHECK-Constraint
+    # nicht verletzen - genau darum geht es hier aber.
     cur.execute(
         f"""
         INSERT INTO argus.observations (obs_id, schema_version, ref_type, ref_id, kind,
@@ -253,9 +257,7 @@ def test_deleting_entity_keeps_observation_and_raw_reference(conn):
             """
         )
         cur.execute("DELETE FROM argus.entities WHERE entity_id = '01ENTDEL'")
-        cur.execute(
-            "SELECT entity_id, ref_id FROM argus.observations WHERE obs_id = '01OBSDEL'"
-        )
+        cur.execute("SELECT entity_id, ref_id FROM argus.observations WHERE obs_id = '01OBSDEL'")
         entity_id, ref_id = cur.fetchone()
     assert entity_id is None
     assert ref_id == "mmsi:99"
@@ -264,38 +266,38 @@ def test_deleting_entity_keeps_observation_and_raw_reference(conn):
 
 # --- Bewertungen ------------------------------------------------------------
 
+
 def test_model_assessment_requires_provenance(conn):
     """Kapitel 11: ohne Modellversion und Prompt-Hash kein Modell-Output."""
-    with conn.cursor() as cur:
-        with pytest.raises(psycopg.errors.CheckViolation):
-            cur.execute(
-                """
+    with conn.cursor() as cur, pytest.raises(psycopg.errors.CheckViolation):
+        cur.execute(
+            """
                 INSERT INTO argus.assessments (assessment_id, schema_version, kind,
                     subject_kind, subject_id, statement, confidence, author_type,
                     author_id, owner_id, evidence)
                 VALUES ('01ASBAD', '1.0.0', 'hypothesis', 'event', '01EV', 'Behauptung',
                         0.6, 'model', 'model:x', 'user:1', '[{"kind":"report","ref":"r1"}]')
                 """
-            )
+        )
     conn.rollback()
 
 
 def test_machine_assessment_requires_evidence(conn):
-    with conn.cursor() as cur:
-        with pytest.raises(psycopg.errors.CheckViolation):
-            cur.execute(
-                """
+    with conn.cursor() as cur, pytest.raises(psycopg.errors.CheckViolation):
+        cur.execute(
+            """
                 INSERT INTO argus.assessments (assessment_id, schema_version, kind,
                     subject_kind, subject_id, statement, confidence, author_type,
                     author_id, owner_id, model, model_version, prompt_hash, evidence)
                 VALUES ('01ASNOEV', '1.0.0', 'hypothesis', 'event', '01EV', 'Behauptung',
                         0.6, 'model', 'model:x', 'user:1', 'llama', '3.1', 'abc', '[]')
                 """
-            )
+        )
     conn.rollback()
 
 
 # --- Alarmhygiene -----------------------------------------------------------
+
 
 def test_only_one_open_alert_per_dedupe_key(conn):
     """Derselbe Sachverhalt erzeugt keinen zweiten offenen Alarm."""

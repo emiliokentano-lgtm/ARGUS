@@ -3,7 +3,7 @@
 Gemeinsame Grundlage aller Datenquellen. Ziel aus Kapitel 5 des Konzepts:
 **eine neue Quelle anzubinden darf höchstens einen halben Tag kosten.**
 
-Ein Konnektor beschreibt nur noch, *wie* er Daten holt und in das kanonische
+Ein Konnektor beschreibt nur noch, _wie_ er Daten holt und in das kanonische
 Schema übersetzt. Alles andere kommt von hier: Cursor-Persistenz,
 Rate-Limiting, Backoff, Circuit Breaker, Bronze-Archivierung, Bus-Zustellung,
 Metriken, Schema-Drift-Erkennung, Kill-Switch, sauberes Herunterfahren.
@@ -17,6 +17,7 @@ Kommentar:
 
 ```python
 from argus_connector import BaseConnector, CanonicalMessage, FetchResult, RawRecord
+
 
 class UsgsEarthquakeConnector(BaseConnector):
     """Erdbeben des USGS, seit dem letzten bekannten Zeitpunkt."""
@@ -42,8 +43,10 @@ class UsgsEarthquakeConnector(BaseConnector):
         features = data["features"]
         newest = max((f["properties"]["time"] for f in features), default=None)
         return FetchResult(
-            records=[RawRecord(payload=f, source_timestamp=f["properties"]["time"] / 1000)
-                     for f in features],
+            records=[
+                RawRecord(payload=f, source_timestamp=f["properties"]["time"] / 1000)
+                for f in features
+            ],
             # Der neue Cursor wird erst festgeschrieben, wenn der Batch
             # zugestellt ist. Ein Absturz davor wiederholt ihn.
             next_cursor=self.to_iso(newest) if newest else cursor,
@@ -52,21 +55,25 @@ class UsgsEarthquakeConnector(BaseConnector):
 
     def normalize(self, raw):
         props, coords = raw.payload["properties"], raw.payload["geometry"]["coordinates"]
-        return [CanonicalMessage(
-            subject_suffix="disaster.earthquake",
-            payload={
-                "schema_version": self.settings.schema_version,
-                "type": "natural.earthquake",
-                "title": props["title"],
-                "occurred_at": {"start": self.to_iso(props["time"]), "precision": "second"},
-                "geo": {"geometry": {"point": {"lon": coords[0], "lat": coords[1]}},
-                        "precision": "exact"},
-                "magnitude": {"scale": "richter", "value": props["mag"], "unit": "M"},
-                "dedupe_key": self.dedupe_key_for(raw.payload),
-            },
-            dedupe_key=self.dedupe_key_for(raw.payload),
-            observed_at=props["time"] / 1000,
-        )]
+        return [
+            CanonicalMessage(
+                subject_suffix="disaster.earthquake",
+                payload={
+                    "schema_version": self.settings.schema_version,
+                    "type": "natural.earthquake",
+                    "title": props["title"],
+                    "occurred_at": {"start": self.to_iso(props["time"]), "precision": "second"},
+                    "geo": {
+                        "geometry": {"point": {"lon": coords[0], "lat": coords[1]}},
+                        "precision": "exact",
+                    },
+                    "magnitude": {"scale": "richter", "value": props["mag"], "unit": "M"},
+                    "dedupe_key": self.dedupe_key_for(raw.payload),
+                },
+                dedupe_key=self.dedupe_key_for(raw.payload),
+                observed_at=props["time"] / 1000,
+            )
+        ]
 ```
 
 Starten:
@@ -77,8 +84,9 @@ from argus_connector import ConnectorRunner, ConnectorSettings, NatsPublisher, B
 from argus_connector.bronze import S3ObjectStore
 from argus_connector.runner import build_cursor_store
 
+
 async def main():
-    settings = ConnectorSettings()            # alles aus der Umgebung
+    settings = ConnectorSettings()  # alles aus der Umgebung
     connector = UsgsEarthquakeConnector(settings)
     runner = ConnectorRunner(
         connector,
@@ -89,6 +97,7 @@ async def main():
     )
     runner.install_signal_handlers()
     await runner.run()
+
 
 asyncio.run(main())
 ```
@@ -115,9 +124,9 @@ ist der eine, den das System nicht machen darf.
 
 Zwei Mechanismen fangen die Wiederholung auf:
 
-* Jede Nachricht trägt ihren `dedupe_key` als `Nats-Msg-Id`. JetStream verwirft
+- Jede Nachricht trägt ihren `dedupe_key` als `Nats-Msg-Id`. JetStream verwirft
   Wiederholungen innerhalb seines Dedupe-Fensters.
-* Danach greift derselbe Schlüssel als Unique-Constraint in der Datenbank.
+- Danach greift derselbe Schlüssel als Unique-Constraint in der Datenbank.
 
 Verifiziert in `tests/test_crash_recovery.py`: ein echter Prozess, mit `SIGKILL`
 getötet, neu gestartet — kein Datensatz fehlt, höchstens ein Batch kommt doppelt.
@@ -126,18 +135,18 @@ getötet, neu gestartet — kein Datensatz fehlt, höchstens ein Batch kommt dop
 
 ## Module
 
-| Modul | Aufgabe |
-|---|---|
-| `base.py` | Konnektor-Vertrag (Protocol) und Basisklasse mit HTTP-Client |
-| `config.py` | Pydantic-Settings, alles aus `ARGUS_*`-Umgebungsvariablen |
-| `cursor.py` | Zwei-Phasen-Cursor; Valkey + Postgres, verkettet |
-| `ratelimit.py` | Token-Bucket, adaptive Drosselung bei 429, `Retry-After` |
-| `retry.py` | Fehlerklassifikation, Backoff mit vollem Jitter, Circuit Breaker |
-| `bronze.py` | Gepufferte, gebündelte S3-Archivierung mit Spool-Fallback |
-| `bus.py` | NATS-JetStream-Publisher, at-least-once mit Bestätigung |
-| `metrics.py` | Prometheus |
-| `drift.py` | Schema-Drift-Erkennung |
-| `runner.py` | Prozess-Lebenszyklus, Signale, Kill-Switch |
+| Modul          | Aufgabe                                                          |
+| -------------- | ---------------------------------------------------------------- |
+| `base.py`      | Konnektor-Vertrag (Protocol) und Basisklasse mit HTTP-Client     |
+| `config.py`    | Pydantic-Settings, alles aus `ARGUS_*`-Umgebungsvariablen        |
+| `cursor.py`    | Zwei-Phasen-Cursor; Valkey + Postgres, verkettet                 |
+| `ratelimit.py` | Token-Bucket, adaptive Drosselung bei 429, `Retry-After`         |
+| `retry.py`     | Fehlerklassifikation, Backoff mit vollem Jitter, Circuit Breaker |
+| `bronze.py`    | Gepufferte, gebündelte S3-Archivierung mit Spool-Fallback        |
+| `bus.py`       | NATS-JetStream-Publisher, at-least-once mit Bestätigung          |
+| `metrics.py`   | Prometheus                                                       |
+| `drift.py`     | Schema-Drift-Erkennung                                           |
+| `runner.py`    | Prozess-Lebenszyklus, Signale, Kill-Switch                       |
 
 ---
 
@@ -145,7 +154,7 @@ getötet, neu gestartet — kein Datensatz fehlt, höchstens ein Batch kommt dop
 
 **Cursor: erst nach dem Publish festschreiben.** `begin()` schreibt einen
 `pending`-Eintrag, `commit()` erst nach der bestätigten Zustellung. Beim
-Neustart wird ab dem *festgeschriebenen* Stand wieder aufgesetzt, nie ab
+Neustart wird ab dem _festgeschriebenen_ Stand wieder aufgesetzt, nie ab
 `pending` — der ist reine Diagnose und sagt, welcher Batch unterbrochen wurde.
 
 **Valkey und Postgres verkettet.** Gelesen wird bevorzugt aus dem Cache,
@@ -191,12 +200,12 @@ Zeitreihe" und „keine Fehler" sähen gleich aus.
 
 Pflicht laut Aufgabenstellung, alle mit den Labels `connector` und `source`:
 
-| Metrik | Typ | Bedeutung |
-|---|---|---|
-| `connector_messages_total` | Counter | nach Stufe: `fetched`, `normalized`, `published`, `skipped_duplicate` |
-| `connector_errors_total` | Counter | nach Fehlerklasse (`dns`, `tls`, `rate_limited`, …) |
-| `connector_lag_seconds` | Gauge | jetzt minus `observed_at` der letzten Nachricht |
-| `connector_last_success_timestamp` | Gauge | Unix-Zeit des letzten erfolgreichen Durchlaufs |
+| Metrik                             | Typ     | Bedeutung                                                             |
+| ---------------------------------- | ------- | --------------------------------------------------------------------- |
+| `connector_messages_total`         | Counter | nach Stufe: `fetched`, `normalized`, `published`, `skipped_duplicate` |
+| `connector_errors_total`           | Counter | nach Fehlerklasse (`dns`, `tls`, `rate_limited`, …)                   |
+| `connector_lag_seconds`            | Gauge   | jetzt minus `observed_at` der letzten Nachricht                       |
+| `connector_last_success_timestamp` | Gauge   | Unix-Zeit des letzten erfolgreichen Durchlaufs                        |
 
 Dazu im Betrieb: `connector_fetch_duration_seconds`,
 `connector_publish_duration_seconds`, `connector_rate_limit_delay_seconds_total`,
@@ -257,30 +266,30 @@ Mock.
 
 Die beiden Abnahmekriterien liegen in eigenen Dateien:
 
-* `tests/test_crash_recovery.py` — Prozess mit `SIGKILL` getötet, neu gestartet,
+- `tests/test_crash_recovery.py` — Prozess mit `SIGKILL` getötet, neu gestartet,
   Vergleich der zugestellten Menge. Auch: dreimal hintereinander töten, und
   `SIGTERM` führt den laufenden Batch zu Ende.
-* `tests/test_throttling.py` — echter HTTP-Server, der 429 liefert. Geprüft wird
-  die Ratenhalbierung, die *an der Uhr ablesbare* Verlangsamung, die Einhaltung
+- `tests/test_throttling.py` — echter HTTP-Server, der 429 liefert. Geprüft wird
+  die Ratenhalbierung, die _an der Uhr ablesbare_ Verlangsamung, die Einhaltung
   von `Retry-After` und die Erholung.
 
 ---
 
 ## Bekannte Grenzen
 
-* **Nur Poll-Betrieb ist erprobt.** `ConnectorMode.STREAM` (WebSocket, TCP) ist
+- **Nur Poll-Betrieb ist erprobt.** `ConnectorMode.STREAM` (WebSocket, TCP) ist
   im Vertrag vorgesehen, aber der Runner ist auf Batches ausgelegt. Ein
   Stream-Konnektor braucht eine eigene Schleife, die dieselben sechs Schritte in
   Zeitfenstern statt in Seiten ausführt.
-* **Ein Prozess, eine Quelle.** Mehrere Quellen je Prozess sind über mehrere
+- **Ein Prozess, eine Quelle.** Mehrere Quellen je Prozess sind über mehrere
   Runner möglich, aber der Kill-Switch und die Metriken sind auf eine
   `connector_id` ausgelegt.
-* **Kein verteiltes Sperren.** Zwei Prozesse mit derselben `connector_id`
+- **Kein verteiltes Sperren.** Zwei Prozesse mit derselben `connector_id`
   überschreiben einander den Cursor. Das gehört in die Orchestrierung
   (eine Replik je Konnektor), nicht ins SDK.
-* **Bronze-Spool wächst unbegrenzt**, solange der Objektspeicher weg ist. Eine
+- **Bronze-Spool wächst unbegrenzt**, solange der Objektspeicher weg ist. Eine
   Obergrenze mit definiertem Verhalten bei Erreichen fehlt noch — bis dahin
   gehört der freie Platz des Spool-Verzeichnisses überwacht.
-* **`botocore` ist synchron.** Die S3-Aufrufe laufen in einem Thread. Das
+- **`botocore` ist synchron.** Die S3-Aufrufe laufen in einem Thread. Das
   blockiert die Ereignisschleife nicht, ist aber kein echtes async I/O — bei
   einem Aufruf je Stunde und Quelle lohnt die zusätzliche Abhängigkeit nicht.

@@ -12,9 +12,6 @@ JSON und zurueck" fuer das gesamte Schema und nicht nur fuer die Beispiele.
 from __future__ import annotations
 
 import pytest
-from google.protobuf import descriptor, json_format
-from jsonschema import Draft202012Validator
-
 from argus.v1 import (
     alert_pb2,
     aoi_pb2,
@@ -30,6 +27,8 @@ from argus.v1 import (
     watchlist_pb2,
 )
 from conftest import load_schema
+from google.protobuf import descriptor, json_format
+from jsonschema import Draft202012Validator
 
 ROOTS = [
     ("Observation", observation_pb2.Observation),

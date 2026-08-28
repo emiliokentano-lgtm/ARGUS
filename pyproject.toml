@@ -1,0 +1,251 @@
+# ARGUS — Wurzel des Python-Workspace.
+#
+# Ein uv-Workspace, eine Sperrdatei (uv.lock), eine virtuelle Umgebung (.venv)
+# fuer alle Python-Pakete. Das ist der Punkt: Abhaengigkeitskonflikte zwischen
+# Workspace-Paketen fallen beim Aufloesen auf und nicht erst zur Laufzeit im
+# falschen Container.
+#
+# Ein Verzeichnis wird erst dann Mitglied, wenn es Code enthaelt. Leere
+# Platzhalter bleiben draussen - sonst schleppt der Workspace Pakete mit, die
+# es noch nicht gibt.
+
+[project]
+name = "argus"
+version = "0.1.0"
+description = "ARGUS — Echtzeit-Lageplattform. Wurzelpaket des Monorepos."
+requires-python = ">=3.11"
+# Die Wurzel selbst liefert keinen Code aus; sie haelt nur den Workspace
+# zusammen und traegt die Werkzeugkonfiguration.
+dependencies = []
+
+[dependency-groups]
+# Werkzeuge, die fuer alle Pakete gelten. Ueber Gruppen statt ueber
+# optional-dependencies, damit sie nicht Teil eines Wheels werden.
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5",
+    # Wiederholung flakiger Integrationstests. Absichtlich nur dort benutzt
+    # und immer zusammen mit scripts/flake_report.py, das jede Wiederholung
+    # sichtbar macht.
+    "pytest-rerunfailures>=14",
+    "pre-commit>=3.7",
+    "types-protobuf>=5",
+    # Optionale Abhaengigkeiten der Mitglieder. Sie stehen dort bewusst als
+    # extras, damit ein Konnektor, der nur in eine Datei schreibt, weder NATS
+    # noch S3 zieht. Die Entwicklungsumgebung braucht sie trotzdem alle -
+    # sonst laufen die Tests eines Pakets nur, wenn man vorher daran denkt.
+    "nats-py>=2.7",
+    "redis>=5.0",
+    "boto3>=1.34",
+    "respx>=0.21",
+]
+
+[tool.uv.workspace]
+members = [
+    "packages/connector-sdk",
+    "packages/geo",
+    "packages/schemas",
+    "services/api",
+]
+
+[tool.uv.sources]
+argus-connector-sdk = { workspace = true }
+argus-geo = { workspace = true }
+argus-schemas = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Die Wurzel enthaelt kein Paket; ohne diese Angabe sucht hatchling eines.
+bypass-selection = true
+
+# ---------------------------------------------------------------------------
+# Ruff — Formatierung und Linting in einem Werkzeug
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    # Erzeugter Code wird nicht gelintet - er wuerde beim naechsten
+    # 'make gen' wieder so aussehen wie vorher.
+    "packages/schemas/gen",
+    "**/.venv",
+    "**/node_modules",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "N",           # pep8-naming
+    "UP",          # pyupgrade
+    "B",           # flake8-bugbear
+    "A",           # flake8-builtins
+    "C4",          # flake8-comprehensions
+    "DTZ",         # flake8-datetimez: naive datetime ist in ARGUS ein Fehler
+    "T20",         # flake8-print: print() gehoert nicht in Bibliothekscode
+    "SIM",         # flake8-simplify
+    "PTH",         # flake8-use-pathlib
+    "RUF",         # ruff-eigene Regeln
+    "ASYNC",       # flake8-async
+    "S",           # bandit
+    "PL",          # pylint
+    # Blinde except-Bloecke sind ein echter Geruch. Sie kommen im SDK vor -
+    # ein Konnektor darf an einem kaputten Datensatz nicht sterben -, aber
+    # jede Stelle braucht dann ein noqa mit Begruendung. Genau das ist der
+    # Zweck der Regel: die Ausnahme sichtbar machen, statt sie zu verbieten.
+    "BLE",
+]
+ignore = [
+    # Kommentare und Zeichenketten sind auf Deutsch; Zeilenlaenge wird ueber
+    # den Formatierer geregelt, nicht ueber den Linter.
+    "E501",
+    # Magische Zahlen in Konfiguration und Tests sind lesbarer als Konstanten.
+    "PLR2004",
+    # Zu viele Argumente/Zweige: bei Konfigurationsobjekten unvermeidbar.
+    "PLR0913", "PLR0912", "PLR0911",
+    # Importe innerhalb von Funktionen. Im Konnektor-SDK Absicht: optionale
+    # Abhaengigkeiten (nats, redis, boto3, psycopg) werden erst beim Gebrauch
+    # geladen, damit ein Konnektor, der sie nicht braucht, sie auch nicht
+    # installieren muss.
+    "PLC0415",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = [
+    "S101",     # assert ist in Tests der Sinn der Sache
+    "S603",     # subprocess mit festen Argumenten
+    "S607",
+    "S608",     # SQL aus Literalen dieser Datei, nie aus Eingaben
+    "BLE001",
+    "S106",     # Testzugangsdaten im Klartext
+    "S311",     # random ohne kryptografischen Anspruch
+    "SLF001",   # Zugriff auf private Attribute beim Pruefen von Interna
+    "PLR2004",
+]
+"services/api/migrations/**" = [
+    # Migrationen sind ausformuliertes DDL; Alembic gibt die Struktur vor.
+    "S608",     # SQL aus Zeichenketten - hier bewusst und ohne Nutzereingabe
+    "N999",
+]
+"**/scripts/**" = [
+    "T20",      # Werkzeuge duerfen auf die Konsole schreiben
+    "S603",     # subprocess mit festen Argumenten, keine Nutzereingabe
+    "S607",
+    "PLR0915",  # Pruefskripte sind lang, aber geradeaus
+]
+"**/tools/**" = ["T20", "PLR0915"]
+"**/conftest.py" = ["S101", "SLF001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["argus_connector", "argus_geo", "argus_migrations"]
+
+[tool.ruff.lint.flake8-builtins]
+builtins-allowed-modules = ["types"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# mypy — streng fuer packages/, nachsichtiger fuer services/
+# ---------------------------------------------------------------------------
+#
+# Warum der Unterschied: packages/ ist Bibliothekscode, den andere benutzen.
+# Ein falscher Typ dort pflanzt sich fort. services/ ist Anwendungscode mit
+# viel Fremdformat an den Raendern; dort waere strict eine Einladung, alles
+# mit 'Any' zuzukleistern - was schlechter waere als ehrliche Lockerheit.
+
+[tool.mypy]
+python_version = "3.11"
+# Geprueft wird ausgeliefertes und ausgefuehrtes: Bibliothekscode, Werkzeuge,
+# Migrationen. Tests stehen bewusst nicht in der Liste - dort sind Fakes,
+# Monkeypatching und absichtlich falsche Eingaben die Regel, und strenge
+# Typpruefung erzeugt dort Rauschen statt Befunden. Tests werden dadurch
+# geprueft, dass sie laufen.
+files = [
+    "packages/connector-sdk/argus_connector",
+    "packages/geo/argus_geo",
+    "packages/schemas/tools",
+    "services/api/argus_migrations.py",
+    "services/api/scripts",
+    "infra/compose/scripts",
+]
+namespace_packages = true
+explicit_package_bases = true
+# Wurzeln der Importpfade. Ohne sie findet mypy dieselbe Datei unter zwei
+# Modulnamen (einmal ueber das installierte Paket, einmal ueber den Quellbaum)
+# und bricht ab.
+mypy_path = "packages/connector-sdk:packages/geo:packages/schemas:services/api:infra/compose"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+
+# Grundniveau fuer alles: Koerper ungetypter Funktionen werden geprueft,
+# implizites Optional ist aus, ein zurueckgegebenes Any faellt auf.
+check_untyped_defs = true
+warn_return_any = true
+no_implicit_optional = true
+strict_equality = true
+
+# packages/ ist Bibliothekscode, den andere benutzen - ein falscher Typ dort
+# pflanzt sich fort. Deshalb dort die vollen strengen Regeln.
+#
+# ACHTUNG: 'strict = true' ist in einem Per-Modul-Abschnitt kein
+# Per-Modul-Schalter - mypy wendet ihn global an. Die Einzelflaggen sind der
+# einzige Weg, Strenge wirklich auf ein Paket zu begrenzen.
+[[tool.mypy.overrides]]
+module = ["argus_connector.*", "argus_geo.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+no_implicit_reexport = true
+extra_checks = true
+
+[[tool.mypy.overrides]]
+# Fremdpakete ohne Typinformationen. Jeder Eintrag ist eine bewusste
+# Entscheidung, keine Sammelamnestie.
+module = [
+    "nats.*",
+    "redis.*",
+    "boto3.*",
+    "alembic.*",
+    "psycopg.*",
+]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers --strict-config"
+markers = [
+    "integration: braucht einen laufenden Dienst (Postgres, Valkey, NATS)",
+    "slow: laeuft mehrere Sekunden",
+]
+filterwarnings = ["error::DeprecationWarning:argus_.*"]
+
+[tool.coverage.run]
+branch = true
+omit = ["*/tests/*", "*/gen/*", "*/.venv/*"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "pragma: no cover",
+    '\.\.\.$',
+]

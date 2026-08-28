@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import itertools
 import time
 
 import pytest
-
 from conftest import requires_db
 
 pytestmark = requires_db
@@ -100,8 +100,7 @@ def test_retraction_does_not_delete_content(conn, event_with_history):
     """Ein Rueckzug loescht nichts - er ergaenzt Status und Begruendung."""
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT title, summary, retraction_reason FROM argus.events "
-            "WHERE event_id = '01EVBT'"
+            "SELECT title, summary, retraction_reason FROM argus.events WHERE event_id = '01EVBT'"
         )
         title, summary, reason = cur.fetchone()
     assert title == "Leitzinsentscheid"
@@ -130,7 +129,7 @@ def test_history_is_gapless_and_non_overlapping(conn, event_with_history):
         periods = cur.fetchall()
 
     assert len(periods) == 3
-    for (_, prev_upper), (next_lower, _) in zip(periods, periods[1:]):
+    for (_, prev_upper), (next_lower, _) in itertools.pairwise(periods):
         assert prev_upper == next_lower, "Luecke oder Ueberlappung in der Versionskette"
     assert periods[-1][1] is None, "die aktuelle Fassung hat ein offenes Ende"
 
@@ -164,8 +163,6 @@ def test_entities_are_versioned_too(conn):
             "UPDATE argus.entities SET display_name = 'Neuer Name', version = 2 "
             "WHERE entity_id = '01ENTBT'"
         )
-        cur.execute(
-            "SELECT display_name FROM argus.entities_history WHERE entity_id = '01ENTBT'"
-        )
+        cur.execute("SELECT display_name FROM argus.entities_history WHERE entity_id = '01ENTBT'")
         assert cur.fetchone()[0] == "Alter Name"
     conn.rollback()

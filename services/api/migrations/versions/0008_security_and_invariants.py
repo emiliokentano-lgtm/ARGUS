@@ -54,13 +54,12 @@ def upgrade() -> None:
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA argus TO argus_app")
     op.execute("GRANT ALL ON ALL TABLES IN SCHEMA argus TO argus_admin")
     op.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA argus TO argus_app, argus_admin")
-    op.execute("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA argus TO argus_readonly, argus_app, argus_admin")
+    op.execute(
+        "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA argus TO argus_readonly, argus_app, argus_admin"
+    )
     # Auch fuer spaeter angelegte Objekte, sonst muss jede neue Migration die
     # Rechte nachziehen.
-    op.execute(
-        "ALTER DEFAULT PRIVILEGES IN SCHEMA argus "
-        "GRANT SELECT ON TABLES TO argus_readonly"
-    )
+    op.execute("ALTER DEFAULT PRIVILEGES IN SCHEMA argus GRANT SELECT ON TABLES TO argus_readonly")
     op.execute(
         "ALTER DEFAULT PRIVILEGES IN SCHEMA argus "
         "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO argus_app"
@@ -239,7 +238,9 @@ def downgrade() -> None:
             op.execute(f"DROP POLICY IF EXISTS {table}_{action} ON argus.{table}")
         op.execute(f"ALTER TABLE argus.{table} DISABLE ROW LEVEL SECURITY")
 
-    op.execute("ALTER DEFAULT PRIVILEGES IN SCHEMA argus REVOKE SELECT ON TABLES FROM argus_readonly")
+    op.execute(
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA argus REVOKE SELECT ON TABLES FROM argus_readonly"
+    )
     op.execute(
         "ALTER DEFAULT PRIVILEGES IN SCHEMA argus "
         "REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM argus_app"

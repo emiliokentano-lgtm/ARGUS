@@ -15,13 +15,12 @@ Aufruf:
 from __future__ import annotations
 
 import argparse
-import io
-import math
 import os
 import random
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 
@@ -67,14 +66,16 @@ def seed_reference_data(conn: psycopg.Connection, entity_count: int) -> list[str
     return entity_ids
 
 
-def generate_rows(entity_ids: list[str], count: int, hours: int, rng: random.Random):
+def generate_rows(
+    entity_ids: list[str], count: int, hours: int, rng: random.Random
+) -> Iterator[tuple[object, ...]]:
     """Erzeugt Zeilen als Text-Tupel fuer COPY.
 
     Die Beobachtungen verteilen sich gleichmaessig ueber die letzten `hours`
     Stunden und ueber die Entitaeten, damit sowohl die Zeit- als auch die
     Entitaetsselektivitaet realistisch sind.
     """
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
     start = now - timedelta(hours=hours)
     span = (now - start).total_seconds()
     n_entities = len(entity_ids)
@@ -111,17 +112,21 @@ def generate_rows(entity_ids: list[str], count: int, hours: int, rng: random.Ran
 
 
 def load(conn: psycopg.Connection, entity_ids: list[str], count: int, hours: int) -> float:
-    rng = random.Random(20260828)
+    # Fester Startwert: der Testbestand soll bei jedem Lauf derselbe sein.
+    # Kryptografische Guete ist hier weder noetig noch gewuenscht.
+    rng = random.Random(20260828)  # noqa: S311
     columns = (
         "obs_id, schema_version, entity_id, ref_type, ref_id, resolution_status, kind, "
         "observed_at, time_quality, ingested_at, source_id, geo, geo_precision, h3_r7, "
         "sog_kn, cog_deg, dedupe_key"
     )
     started = time.perf_counter()
-    with conn.cursor() as cur:
-        with cur.copy(f"COPY argus.observations ({columns}) FROM STDIN") as copy:
-            for row in generate_rows(entity_ids, count, hours, rng):
-                copy.write_row(row)
+    with (
+        conn.cursor() as cur,
+        cur.copy(f"COPY argus.observations ({columns}) FROM STDIN") as copy,
+    ):
+        for row in generate_rows(entity_ids, count, hours, rng):
+            copy.write_row(row)
     conn.commit()
     return time.perf_counter() - started
 
@@ -130,8 +135,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--observations", type=int, default=1_000_000)
     ap.add_argument("--entities", type=int, default=5_000)
-    ap.add_argument("--hours", type=int, default=72,
-                    help="Zeitraum, ueber den die Beobachtungen verteilt werden")
+    ap.add_argument(
+        "--hours",
+        type=int,
+        default=72,
+        help="Zeitraum, ueber den die Beobachtungen verteilt werden",
+    )
     ap.add_argument("--budget-seconds", type=float, default=90.0)
     ap.add_argument("--no-analyze", action="store_true")
     args = ap.parse_args()
@@ -145,7 +154,9 @@ def main() -> int:
         print(f"Lege {args.entities} Entitaeten an ...")
         entity_ids = seed_reference_data(conn, args.entities)
 
-        print(f"Lade {args.observations:,} Beobachtungen ueber {args.hours} h ...".replace(",", "."))
+        print(
+            f"Lade {args.observations:,} Beobachtungen ueber {args.hours} h ...".replace(",", ".")
+        )
         elapsed = load(conn, entity_ids, args.observations, args.hours)
         rate = args.observations / elapsed
 
@@ -158,7 +169,8 @@ def main() -> int:
 
         with conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM argus.observations")
-            total = cur.fetchone()[0]
+            row = cur.fetchone()
+            total = row[0] if row else 0
             # Bei einer partitionierten Tabelle liefert pg_total_relation_size
             # auf der Elterntabelle 0 - die Groesse steckt in den Partitionen.
             cur.execute(
@@ -170,7 +182,8 @@ def main() -> int:
                  WHERE i.inhparent = 'argus.observations'::regclass
                 """
             )
-            size = cur.fetchone()[0]
+            size_row = cur.fetchone()
+            size = size_row[0] if size_row else "unbekannt"
 
     print()
     print(f"  Ladezeit          {elapsed:.1f} s")

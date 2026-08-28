@@ -21,7 +21,6 @@ import uuid
 from pathlib import Path
 
 import pytest
-
 from conftest import PACKAGE_DIR, requires_postgres
 from fixtures.mock_source import MockSource
 
@@ -105,7 +104,7 @@ def test_kill_and_resume_loses_nothing(scenario):
 
         # Neustart: derselbe Konnektor, derselbe Cursor-Speicher.
         second = _launch(env)
-        stdout, stderr = second.communicate(timeout=180)
+        _, stderr = second.communicate(timeout=180)
         assert second.returncode == 0, f"Neustart fehlgeschlagen:\n{stderr}"
 
     after = _published(output)

@@ -10,7 +10,7 @@
 
 Kapitel 3 des Konzepts verlangt ein Datenmodell für alles: Flugzeug, Erdbeben und
 Zinsentscheid teilen sich dieselbe Grundstruktur. Kapitel 15 verlangt, dass
-PostgreSQL relationale Daten, Geometrie und Zeitreihen in *einem* System hält.
+PostgreSQL relationale Daten, Geometrie und Zeitreihen in _einem_ System hält.
 Kapitel 3.4 verlangt Bitemporalität — die Frage „was wussten wir am 12.03. um
 04:00" muss beantwortbar sein, nicht nur „was wissen wir heute darüber".
 
@@ -31,7 +31,7 @@ In der Datenbank geht das nicht: `observed_at` ist der Partitionsschlüssel, und
 ein Partitionsschlüssel darf nicht NULL sein — weder bei einer
 TimescaleDB-Hypertable noch bei nativer Bereichspartitionierung.
 
-**Entschieden:** `observed_at timestamptz NOT NULL` als *wirksame* Valid Time,
+**Entschieden:** `observed_at timestamptz NOT NULL` als _wirksame_ Valid Time,
 plus `time_quality` aus dem Protobuf als eigene Spalte. Fehlt der
 Quellzeitstempel, setzt die Pipeline `observed_at = ingested_at` **und**
 `time_quality = 'inferred_from_ingest'`. Ein CHECK erzwingt diese Kopplung:
@@ -66,9 +66,9 @@ also eine eigene Migration.
 
 Jede versionierte Tabelle (`events`, `entities`, `relations`) hat:
 
-* `sys_period tstzrange NOT NULL` — Gültigkeit *dieser Fassung im System*
-* eine Zwillingstabelle `<name>_history` mit identischen Spalten
-* einen `BEFORE UPDATE OR DELETE`-Trigger, der die abgelöste Fassung mit
+- `sys_period tstzrange NOT NULL` — Gültigkeit _dieser Fassung im System_
+- eine Zwillingstabelle `<name>_history` mit identischen Spalten
+- einen `BEFORE UPDATE OR DELETE`-Trigger, der die abgelöste Fassung mit
   geschlossenem Intervall in den Verlauf schreibt
 
 Damit reihen sich die Intervalle lückenlos und überlappungsfrei aneinander: zu
@@ -88,9 +88,9 @@ ist aber eine weitere Abhängigkeit, die im Image vorhanden sein muss — für r
 
 ### 4. Geometrie doppelt indiziert: `geography` mit GiST und `h3_r7 bigint` mit B-Tree
 
-* `geography(Point, 4326)` + GiST für exakte Abstände, Polygon-Enthaltensein und
+- `geography(Point, 4326)` + GiST für exakte Abstände, Polygon-Enthaltensein und
   AOI-Prüfung.
-* `h3_r7 bigint` + B-Tree für Viewport- und Nachbarschaftsabfragen. Ein
+- `h3_r7 bigint` + B-Tree für Viewport- und Nachbarschaftsabfragen. Ein
   Ganzzahlvergleich schlägt jede Geometrieoperation, solange die Auflösung passt.
 
 `geography` statt `geometry`: Entfernungen sind in Metern auf dem Ellipsoid
@@ -294,30 +294,30 @@ erDiagram
 
 **Positiv**
 
-* Eine Zeitreise ist eine Abfrage, kein Rekonstruktionsprojekt.
-* Die Kernprinzipien sind von der Datenbank durchgesetzt, nicht nur dokumentiert:
+- Eine Zeitreise ist eine Abfrage, kein Rekonstruktionsprojekt.
+- Die Kernprinzipien sind von der Datenbank durchgesetzt, nicht nur dokumentiert:
   markierte Ableitung, gekoppelte Zeitqualität, Belegpflicht bei Modell-Aussagen,
   ein offener Alarm je Sachverhalt.
-* Die DDL-Referenz unter `packages/schemas/sql/` wird generiert und kann nicht
+- Die DDL-Referenz unter `packages/schemas/sql/` wird generiert und kann nicht
   abweichen.
-* Der Stack läuft auch ohne TimescaleDB.
+- Der Stack läuft auch ohne TimescaleDB.
 
 **Negativ**
 
-* Acht Migrationen mit ausformuliertem DDL statt ORM-Modellen. Autogenerate ist
+- Acht Migrationen mit ausformuliertem DDL statt ORM-Modellen. Autogenerate ist
   aus; jede Änderung ist Handarbeit. Das ist der Preis dafür, dass PostGIS-Typen,
   Trigger, generierte Spalten und Partitionierung korrekt abgebildet sind.
-* Verlaufstabellen verdoppeln den Speicherbedarf viel geänderter Objekte.
-* Enum-Erweiterungen brauchen jeweils eine eigene Migration.
-* Die Zwei-Wege-Partitionierung (Timescale / nativ) ist zusätzliche Fläche, die
+- Verlaufstabellen verdoppeln den Speicherbedarf viel geänderter Objekte.
+- Enum-Erweiterungen brauchen jeweils eine eigene Migration.
+- Die Zwei-Wege-Partitionierung (Timescale / nativ) ist zusätzliche Fläche, die
   getestet werden muss.
 
 **Revidieren, wenn**
 
-* die Verlaufstabellen dominieren — dann gehört der Verlauf in ClickHouse und
+- die Verlaufstabellen dominieren — dann gehört der Verlauf in ClickHouse und
   PostgreSQL behält nur ein begrenztes Fenster;
-* die Zahl der Ereignistypen so stabil wird, dass ein Enum den String schlägt;
-* TimescaleDB lizenzrechtlich ausscheidet — dann fällt der `on`-Pfad weg und die
+- die Zahl der Ereignistypen so stabil wird, dass ein Enum den String schlägt;
+- TimescaleDB lizenzrechtlich ausscheidet — dann fällt der `on`-Pfad weg und die
   Kompression muss anders gelöst werden.
 
 ---
@@ -326,11 +326,11 @@ erDiagram
 
 Auf PostgreSQL 16.15 mit PostGIS 3.4.2, pgvector 0.6.0, `ARGUS_TIMESCALE=off`:
 
-| Kriterium | Ergebnis |
-|---|---|
-| `alembic upgrade head` / `downgrade base` | beide fehlerfrei, dreimal wiederholt |
-| jede Migration einzeln vor und zurück | fehlerfrei |
-| 1 Mio. Beobachtungen laden (Budget 90 s) | **38,6 s**, 25.881 Zeilen/s, 646 MB inkl. Indizes |
+| Kriterium                                           | Ergebnis                                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `alembic upgrade head` / `downgrade base`           | beide fehlerfrei, dreimal wiederholt                                                                |
+| jede Migration einzeln vor und zurück               | fehlerfrei                                                                                          |
+| 1 Mio. Beobachtungen laden (Budget 90 s)            | **38,6 s**, 25.881 Zeilen/s, 646 MB inkl. Indizes                                                   |
 | „alle Beobachtungen einer Entität der letzten 24 h" | Bitmap Index Scan auf `observations_entity_time_idx`, **0,8 ms** Ausführung (7,95 ms inkl. Planung) |
-| Zustand eines Ereignisses zum Zeitpunkt T | korrekte historische Fassung, genau eine Zeile je Zeitpunkt |
-| Schema-Invarianten | keine naiven Zeitstempel, kein Fremdschlüssel ohne `ON DELETE` |
+| Zustand eines Ereignisses zum Zeitpunkt T           | korrekte historische Fassung, genau eine Zeile je Zeitpunkt                                         |
+| Schema-Invarianten                                  | keine naiven Zeitstempel, kein Fremdschlüssel ohne `ON DELETE`                                      |

@@ -12,6 +12,7 @@ Prometheus-Metriken sind sonst globaler Zustand.
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, start_http_server
 
@@ -100,8 +101,7 @@ class ConnectorMetrics:
         )
         self.clock_skew_seconds = Gauge(
             "connector_clock_skew_seconds",
-            "Gemessener Versatz zwischen Quellenuhr und Systemuhr. Positiv: "
-            "die Quelle geht vor.",
+            "Gemessener Versatz zwischen Quellenuhr und Systemuhr. Positiv: die Quelle geht vor.",
             labels,
             registry=self.registry,
         )
@@ -132,8 +132,7 @@ class ConnectorMetrics:
         )
         self.up = Gauge(
             "connector_up",
-            "1 wenn der Konnektor laeuft und nicht ueber den Kill-Switch "
-            "angehalten wurde.",
+            "1 wenn der Konnektor laeuft und nicht ueber den Kill-Switch angehalten wurde.",
             labels,
             registry=self.registry,
         )
@@ -206,10 +205,12 @@ class ConnectorMetrics:
     def set_bronze_buffer(self, count: int) -> None:
         self.bronze_buffered_records.labels(**self._labels).set(count)
 
-    def fetch_timer(self):
+    def fetch_timer(self) -> Any:
+        """Kontextmanager, der die Dauer misst. Rueckgabetyp Any, weil
+        prometheus_client seinen Timer nicht typisiert."""
         return self.fetch_duration.labels(**self._labels).time()
 
-    def publish_timer(self):
+    def publish_timer(self) -> Any:
         return self.publish_duration.labels(**self._labels).time()
 
     def serve(self, host: str, port: int) -> None:

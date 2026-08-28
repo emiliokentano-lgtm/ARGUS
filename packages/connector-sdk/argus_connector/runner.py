@@ -46,10 +46,10 @@ from argus_connector.retry import ConnectorError, ErrorKind, classify
 logger = logging.getLogger(__name__)
 
 
-class RunnerState(str, enum.Enum):
+class RunnerState(enum.StrEnum):
     CREATED = "created"
     RUNNING = "running"
-    PAUSED = "paused"      # ueber den Kill-Switch angehalten
+    PAUSED = "paused"  # ueber den Kill-Switch angehalten
     STOPPING = "stopping"
     STOPPED = "stopped"
 
@@ -206,7 +206,7 @@ class ConnectorRunner:
             for record in result.records:
                 try:
                     messages.extend(self.connector.normalize(record))
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     # Ein unbrauchbarer Satz darf den Batch nicht kippen: die
                     # Rohdaten liegen in Bronze und sind nachverarbeitbar.
                     self.metrics.error(classify(exc).value)
@@ -269,7 +269,8 @@ class ConnectorRunner:
 
         logger.info(
             "Konnektor %s gestartet (Quelle %s), Wiederaufnahme ab %r",
-            self.settings.connector_id, self.settings.source_id,
+            self.settings.connector_id,
+            self.settings.source_id,
             cursor.value if cursor else None,
         )
 
@@ -285,21 +286,8 @@ class ConnectorRunner:
                     if self._stop_event.is_set():
                         break
 
-                try:
-                    result = await asyncio.wait_for(
-                        self.connector.fetch(
-                            self.cursors.committed.value if self.cursors.committed else None
-                        ),
-                        timeout=self.settings.fetch_timeout_s,
-                    )
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:  # noqa: BLE001
-                    kind = classify(exc)
-                    self.metrics.error(kind.value)
-                    self.metrics.set_circuit_state(self.connector.breaker.state.value)
-                    logger.error("Abruf fehlgeschlagen (%s): %s", kind.value, exc)
-                    await self.cursors.abort()
+                result = await self._fetch_once()
+                if result is None:
                     await self._idle(self.settings.poll_interval_s)
                     continue
 
@@ -313,7 +301,9 @@ class ConnectorRunner:
                     self.metrics.error(kind.value)
                     logger.error(
                         "Batch fehlgeschlagen (%s) - Cursor bleibt stehen, "
-                        "der Batch wird wiederholt: %s", kind.value, exc,
+                        "der Batch wird wiederholt: %s",
+                        kind.value,
+                        exc,
                     )
                     await self.cursors.abort()
                     await self._idle(self.settings.poll_interval_s)
@@ -324,6 +314,31 @@ class ConnectorRunner:
                 await self._idle(self.settings.poll_interval_s)
         finally:
             await self.shutdown()
+
+    async def _fetch_once(self) -> FetchResult | None:
+        """Ein Abruf bei der Quelle. None bedeutet: fehlgeschlagen, spaeter erneut.
+
+        Der Fehler wird hier klassifiziert und protokolliert, nicht geworfen:
+        eine unerreichbare Quelle ist ein Betriebszustand, kein Programmfehler.
+        Der Cursor bleibt unangetastet, der naechste Durchlauf versucht es
+        wieder.
+        """
+        try:
+            return await asyncio.wait_for(
+                self.connector.fetch(
+                    self.cursors.committed.value if self.cursors.committed else None
+                ),
+                timeout=self.settings.fetch_timeout_s,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - wird klassifiziert und protokolliert
+            kind = classify(exc)
+            self.metrics.error(kind.value)
+            self.metrics.set_circuit_state(self.connector.breaker.state.value)
+            logger.error("Abruf fehlgeschlagen (%s): %s", kind.value, exc)
+            await self.cursors.abort()
+            return None
 
     async def _idle(self, seconds: float) -> None:
         """Wartezeit, in der Bronze gepuffert und Spool nachgereicht wird."""
@@ -385,8 +400,10 @@ class ConnectorRunner:
         logger.info(
             "Beendet: %d Batches, %d Saetze, %d Nachrichten veroeffentlicht, "
             "%d Duplikate verworfen",
-            self.batches_completed, self.records_processed,
-            self.messages_published, self.duplicates_skipped,
+            self.batches_completed,
+            self.records_processed,
+            self.messages_published,
+            self.duplicates_skipped,
         )
 
 
@@ -421,7 +438,5 @@ def build_cursor_store(settings: ConnectorSettings) -> CursorStore:
         )
     return ChainedCursorStore(
         ValkeyCursorStore(settings.cursor.valkey_url, key_prefix=settings.cursor.key_prefix),
-        PostgresCursorStore(
-            settings.cursor.postgres_dsn, schema=settings.cursor.postgres_schema
-        ),
+        PostgresCursorStore(settings.cursor.postgres_dsn, schema=settings.cursor.postgres_schema),
     )

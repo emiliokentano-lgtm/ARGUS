@@ -5,7 +5,7 @@ Migrationen sind die **Wahrheitsquelle für das Datenbankschema**; die DDL-Refer
 unter `packages/schemas/sql/` wird daraus erzeugt und nie von Hand gepflegt.
 
 Die Protobuf-Schemas aus `packages/schemas/` bleiben die Wahrheitsquelle für die
-*Datenstrukturen auf der Leitung*. Wo die Abbildung auf PostgreSQL bewusst nicht
+_Datenstrukturen auf der Leitung_. Wo die Abbildung auf PostgreSQL bewusst nicht
 1:1 ist, steht die Begründung in [ADR 0003](../../docs/adr/0003-datenmodell.md).
 
 ---
@@ -32,26 +32,26 @@ Direkt mit Alembic:
 
 ### Umgebungsvariablen
 
-| Variable | Bedeutung |
-|---|---|
-| `DATABASE_URL` | Pflicht. `postgresql://…` oder `postgresql+psycopg://…` |
-| `ARGUS_TIMESCALE` | `auto` (Standard), `on`, `off` — siehe unten |
+| Variable                            | Bedeutung                                                |
+| ----------------------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`                      | Pflicht. `postgresql://…` oder `postgresql+psycopg://…`  |
+| `ARGUS_TIMESCALE`                   | `auto` (Standard), `on`, `off` — siehe unten             |
 | `ARGUS_ALLOW_DESTRUCTIVE_DOWNGRADE` | `1` erlaubt einen Rollback, der befüllte Tabellen löscht |
 
 ---
 
 ## Die Migrationen
 
-| Nr. | Inhalt |
-|---|---|
+| Nr.    | Inhalt                                                                                                                                         |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `0001` | Erweiterungen, Schema `argus`, 34 Aufzählungstypen, Hilfsfunktionen (Volltextkonfiguration, `updated_at`, bitemporaler Trigger, RLS-Identität) |
-| `0002` | `sources`, `entities` (+ Verlauf), `entity_aliases`, `entity_sanctions` |
-| `0003` | `events` (+ Verlauf), `event_entities`, `event_links`, `event_contradictions`, `argus.event_as_of()` |
-| `0004` | `reports`, Übersetzungen, Erwähnungen, Georeferenzen, Bericht↔Ereignis |
-| `0005` | `observations` als Hypertable oder nativ partitioniert, Kompression, Retention |
-| `0006` | `tracks`, `track_gaps`, `relations` (+ Verlauf) |
-| `0007` | `aois`, `watchlists`, `scores`, `assessments`, `alerts`, `cases`, `data_gaps` |
-| `0008` | Rollen, Row-Level Security, Schema-Invarianten |
+| `0002` | `sources`, `entities` (+ Verlauf), `entity_aliases`, `entity_sanctions`                                                                        |
+| `0003` | `events` (+ Verlauf), `event_entities`, `event_links`, `event_contradictions`, `argus.event_as_of()`                                           |
+| `0004` | `reports`, Übersetzungen, Erwähnungen, Georeferenzen, Bericht↔Ereignis                                                                         |
+| `0005` | `observations` als Hypertable oder nativ partitioniert, Kompression, Retention                                                                 |
+| `0006` | `tracks`, `track_gaps`, `relations` (+ Verlauf)                                                                                                |
+| `0007` | `aois`, `watchlists`, `scores`, `assessments`, `alerts`, `cases`, `data_gaps`                                                                  |
+| `0008` | Rollen, Row-Level Security, Schema-Invarianten                                                                                                 |
 
 Jede Migration hat ein funktionierendes `downgrade`. Der Test
 `test_each_migration_can_be_stepped_individually` fährt sie einzeln vor und
@@ -64,11 +64,11 @@ zurück — das findet Abhängigkeiten, die im Gesamtlauf zufällig funktioniere
 `observations` ist in beiden Fällen nach `observed_at` mit Tagesintervall
 partitioniert und trägt dieselben Indizes.
 
-| `ARGUS_TIMESCALE` | Verhalten |
-|---|---|
+| `ARGUS_TIMESCALE` | Verhalten                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------- |
 | `auto` (Standard) | TimescaleDB benutzen, wenn verfügbar; sonst native Bereichspartitionierung mit Hinweis |
-| `on` | TimescaleDB verlangen; fehlt es, Abbruch mit Handlungsanweisung |
-| `off` | immer native Partitionierung |
+| `on`              | TimescaleDB verlangen; fehlt es, Abbruch mit Handlungsanweisung                        |
+| `off`             | immer native Partitionierung                                                           |
 
 Mit TimescaleDB: `create_hypertable`, Kompression nach 7 Tagen
 (`segmentby = entity_id`), Retention nach 90 Tagen — beides als Policy.
@@ -135,18 +135,18 @@ und `case_notes` (erben die Sichtbarkeit ihres Cases). Rollen: `argus_readonly`,
 
 ## Bekannte Grenzen
 
-* **Kein ORM-Modell.** Autogenerate ist bewusst aus; es bildet PostGIS-Typen,
+- **Kein ORM-Modell.** Autogenerate ist bewusst aus; es bildet PostGIS-Typen,
   Hypertables, generierte Spalten und Trigger nicht korrekt ab. SQLAlchemy-Modelle
   für die API kommen später und müssen dem DDL folgen, nicht umgekehrt.
-* **Verlaufstabellen wachsen unbegrenzt.** Bei viel geänderten Objekten
+- **Verlaufstabellen wachsen unbegrenzt.** Bei viel geänderten Objekten
   verdoppeln sie den Speicherbedarf. Eine Auslagerung nach ClickHouse ist der
   Revisionspunkt in ADR 0003.
-* **Enum-Erweiterungen brauchen eine eigene Migration** —
+- **Enum-Erweiterungen brauchen eine eigene Migration** —
   `ALTER TYPE ... ADD VALUE` ist in PostgreSQL nicht in derselben Transaktion
   benutzbar, in der der Typ entsteht.
-* **Retention löscht, aggregiert aber nicht.** Kapitel 14 verlangt „nach 90 Tagen
+- **Retention löscht, aggregiert aber nicht.** Kapitel 14 verlangt „nach 90 Tagen
   aggregiert"; die Aggregate gehören nach ClickHouse und sind nicht Teil dieser
   Migrationen.
-* **Die Auffangpartition** (`observations_default`, nur ohne TimescaleDB) nimmt
+- **Die Auffangpartition** (`observations_default`, nur ohne TimescaleDB) nimmt
   Zeitstempel außerhalb der angelegten Tage auf. Nicht leer zu sein ist ein
   Datenqualitätsvorfall; `argus.observations_maintenance()` meldet es.

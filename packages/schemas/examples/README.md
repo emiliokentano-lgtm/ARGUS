@@ -2,14 +2,14 @@
 
 Zwei Gruppen:
 
-* **`concept/`** — die Payloads aus Kapitel 3.2 des Konzepts, angepasst an die
+- **`concept/`** — die Payloads aus Kapitel 3.2 des Konzepts, angepasst an die
   kanonische Protobuf-JSON-Abbildung. Abweichungen sind unten vollständig
   aufgeführt.
-* **`error-cases/`** — die fünf ausdrücklich modellierten Fehlerfälle.
+- **`error-cases/`** — die fünf ausdrücklich modellierten Fehlerfälle.
 
 Alle Fixtures werden von `tests/test_examples.py` gegen beide Schema-Varianten
 validiert und durch einen vollständigen Round-Trip geschickt. Sie sind damit
-keine Dokumentation *über* das Schema, sondern geprüfte Beispiele *aus* ihm.
+keine Dokumentation _über_ das Schema, sondern geprüfte Beispiele _aus_ ihm.
 
 Fixtures dürfen einen Schlüssel `_case` tragen, der den abgebildeten Fall
 beschreibt. Er ist nicht Teil des Schemas und wird vor der Validierung
@@ -24,13 +24,13 @@ verworfen, sondern an drei Stellen angepasst. Jede Abweichung mit Grund:
 
 ### 1. Enums als kanonische Wertnamen
 
-| Kapitel 3.2 | hier | betroffen |
-|---|---|---|
-| `"vessel"` | `"ENTITY_TYPE_VESSEL"` | `entity_ref.type` |
-| `"B"` | `"SOURCE_RELIABILITY_B"` | `source.reliability` |
-| `"minute"` | `"TIME_PRECISION_MINUTE"` | `occurred_at.precision` |
-| `"city"` | `"GEO_PRECISION_CITY"` | `geo.precision` |
-| `"confirmed"` | `"EVENT_STATUS_CONFIRMED"` | `status` |
+| Kapitel 3.2   | hier                       | betroffen               |
+| ------------- | -------------------------- | ----------------------- |
+| `"vessel"`    | `"ENTITY_TYPE_VESSEL"`     | `entity_ref.type`       |
+| `"B"`         | `"SOURCE_RELIABILITY_B"`   | `source.reliability`    |
+| `"minute"`    | `"TIME_PRECISION_MINUTE"`  | `occurred_at.precision` |
+| `"city"`      | `"GEO_PRECISION_CITY"`     | `geo.precision`         |
+| `"confirmed"` | `"EVENT_STATUS_CONFIRMED"` | `status`                |
 
 **Grund:** Protobuf-JSON schreibt den Enum-Wertnamen vor, und `buf lint`
 verlangt den Enum-Namen als Präfix. Die Alternative wäre gewesen, diese Felder
@@ -61,17 +61,17 @@ der wir nichts gefunden haben".
 
 Die Payloads im Konzept sind gekürzt (`"…"`, `{...}`, `[...]`). Ergänzt wurden:
 
-* **`Event`**: `schema_version`, `ingested_at`, `source`, `raw_ref` — der
+- **`Event`**: `schema_version`, `ingested_at`, `source`, `raw_ref` — der
   Record-Header, den jedes Objekt trägt. Ohne ihn hätte das Beispiel die
   strenge Schema-Fassung nicht erfüllt.
-* **`Event.geo.geometry`**: ein konkreter Punkt statt `{...}`.
-* **`Event.scores.explanation`**: das Array aus Kapitel 7.3, ergänzt um zwei
+- **`Event.geo.geometry`**: ein konkreter Punkt statt `{...}`.
+- **`Event.scores.explanation`**: das Array aus Kapitel 7.3, ergänzt um zwei
   weitere Faktoren.
-* **`Observation.dedupe_key`**: Pflichtfeld nach Kapitel 5.2 (Idempotenz).
-* **`Observation.quality.time_quality`**: Herkunft des Zeitstempels.
-* **`Observation.geo.precision`**: `GEO_PRECISION_EXACT`. Die Regel aus
+- **`Observation.dedupe_key`**: Pflichtfeld nach Kapitel 5.2 (Idempotenz).
+- **`Observation.quality.time_quality`**: Herkunft des Zeitstempels.
+- **`Observation.geo.precision`**: `GEO_PRECISION_EXACT`. Die Regel aus
   Kapitel 3.5 verlangt, dass Ortsgenauigkeit immer markiert ist.
-* **`Observation.geo.h3_r5` / `h3_r9`**: die beiden anderen der drei in
+- **`Observation.geo.h3_r5` / `h3_r9`**: die beiden anderen der drei in
   Kapitel 3.5 genannten Auflösungen.
 
 Die im Konzept vorhandenen Werte wurden dabei **nicht** verändert.
@@ -88,10 +88,10 @@ keine realen Kennungen. Das Konzept kürzt sie ebenfalls ab (`"01HZX..."`,
 
 ## Fehlerfälle
 
-| Datei | Abgebildeter Fall | Kernaussage |
-|---|---|---|
-| `unknown-entity.observation.json` | unbekannte Entität | `entity_ref.id` behält den Rohbezug, `resolved_entity_id` fehlt, `resolution_status` erklärt es |
-| `missing-timestamp.observation.json` | Position ohne Zeitstempel | `observed_at` fehlt ganz; es wird nicht `ingested_at` untergeschoben |
-| `country-only.event.json` | Ereignis nur mit Landangabe | keine Geometrie, `GEO_PRECISION_COUNTRY`, kein erfundener Punkt in der Landesmitte |
-| `disputed.event.json` | widersprüchliche Meldungen | beide Behauptungen bleiben mit eigener Quelle erhalten, kein Sieger |
-| `retracted.event.json` | zurückgezogene Meldung | Datensatz bleibt vollständig, Status und Versionskette dokumentieren den Widerruf |
+| Datei                                | Abgebildeter Fall           | Kernaussage                                                                                     |
+| ------------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------- |
+| `unknown-entity.observation.json`    | unbekannte Entität          | `entity_ref.id` behält den Rohbezug, `resolved_entity_id` fehlt, `resolution_status` erklärt es |
+| `missing-timestamp.observation.json` | Position ohne Zeitstempel   | `observed_at` fehlt ganz; es wird nicht `ingested_at` untergeschoben                            |
+| `country-only.event.json`            | Ereignis nur mit Landangabe | keine Geometrie, `GEO_PRECISION_COUNTRY`, kein erfundener Punkt in der Landesmitte              |
+| `disputed.event.json`                | widersprüchliche Meldungen  | beide Behauptungen bleiben mit eigener Quelle erhalten, kein Sieger                             |
+| `retracted.event.json`               | zurückgezogene Meldung      | Datensatz bleibt vollständig, Status und Versionskette dokumentieren den Widerruf               |

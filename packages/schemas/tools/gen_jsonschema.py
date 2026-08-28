@@ -34,6 +34,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 from google.protobuf import descriptor_pb2
 
@@ -93,9 +94,7 @@ _WELL_KNOWN: dict[str, dict] = {
         "type": "object",
         "description": "Freies JSON-Objekt (google.protobuf.Struct)",
     },
-    ".google.protobuf.Value": {
-        "description": "Beliebiger JSON-Wert (google.protobuf.Value)"
-    },
+    ".google.protobuf.Value": {"description": "Beliebiger JSON-Wert (google.protobuf.Value)"},
     ".google.protobuf.ListValue": {"type": "array"},
     ".google.protobuf.FieldMask": {"type": "string"},
     ".google.protobuf.Empty": {"type": "object", "additionalProperties": False},
@@ -143,18 +142,18 @@ class Index:
         self.messages[fqn] = msg
         self._comment(fqn, path, by_path)
         for i, field in enumerate(msg.field):
-            self._comment(f"{fqn}#{field.name}", path + (_MSG_FIELD, i), by_path)
+            self._comment(f"{fqn}#{field.name}", (*path, _MSG_FIELD, i), by_path)
         for i, nested in enumerate(msg.nested_type):
-            self._index_message(nested, fqn, path + (_MSG_NESTED, i), by_path)
+            self._index_message(nested, fqn, (*path, _MSG_NESTED, i), by_path)
         for i, enum in enumerate(msg.enum_type):
-            self._index_enum(enum, fqn, path + (_MSG_ENUM, i), by_path)
+            self._index_enum(enum, fqn, (*path, _MSG_ENUM, i), by_path)
 
     def _index_enum(self, enum, prefix, path, by_path) -> None:
         fqn = f"{prefix}.{enum.name}"
         self.enums[fqn] = enum
         self._comment(fqn, path, by_path)
         for i, value in enumerate(enum.value):
-            self._comment(f"{fqn}#{value.name}", path + (_ENUM_VALUE, i), by_path)
+            self._comment(f"{fqn}#{value.name}", (*path, _ENUM_VALUE, i), by_path)
 
     def _comment(self, key: str, path: tuple, by_path: dict) -> None:
         # Schluessel ohne fuehrenden Punkt, damit sie zu den JSON-Schema-Titeln
@@ -207,7 +206,7 @@ class Generator:
             if c:
                 value_docs.append(f"{v.name}: {c}")
         parts = [p for p in (doc, "\n".join(value_docs)) if p]
-        schema = {
+        schema: dict[str, Any] = {
             "anyOf": [
                 {"enum": names},
                 # Protobuf-JSON akzeptiert auch die Ordnungszahl.
@@ -265,15 +264,15 @@ class Generator:
         if "$ref" in schema:
             return {"anyOf": [schema, {"type": "null"}]}
         if "anyOf" in schema and "description" not in schema:
-            return {"anyOf": list(schema["anyOf"]) + [{"type": "null"}]}
+            return {"anyOf": [*schema["anyOf"], {"type": "null"}]}
         out = dict(schema)
         if "anyOf" in out:
-            out["anyOf"] = list(out["anyOf"]) + [{"type": "null"}]
+            out["anyOf"] = [*out["anyOf"], {"type": "null"}]
             return out
         t = out.get("type")
         if t is None:
             return out  # bereits beliebig (google.protobuf.Value)
-        out["type"] = [t, "null"] if isinstance(t, str) else list(t) + ["null"]
+        out["type"] = [t, "null"] if isinstance(t, str) else [*t, "null"]
         return out
 
     def _message_schema(self, type_name: str) -> dict:
@@ -297,21 +296,21 @@ class Generator:
                 # einmal in proto-, einmal in camelCase-Schreibweise.
                 dependent[field.name] = {"not": {"required": [camel]}}
 
-        schema: dict = {
+        message_schema: dict[str, Any] = {
             "type": "object",
             "title": fqn,
             "properties": properties,
             "additionalProperties": False,
         }
         if dependent:
-            schema["dependentSchemas"] = dependent
+            message_schema["dependentSchemas"] = dependent
         doc = self.index.comments.get(fqn)
         if doc:
-            schema["description"] = doc
+            message_schema["description"] = doc
         req = self.required.get(fqn)
         if req:
-            schema["x-argus-required"] = req
-        return schema
+            message_schema["x-argus-required"] = req
+        return message_schema
 
     # -- Dokumente ---------------------------------------------------------
 

@@ -20,8 +20,7 @@ EXAMPLES = SCHEMA_DIR / "examples"
 
 if not GEN_PYTHON.exists() or not GEN_JSONSCHEMA.exists():
     raise RuntimeError(
-        "Generierte Artefakte fehlen. Zuerst 'make gen' im Verzeichnis "
-        "packages/schemas ausfuehren."
+        "Generierte Artefakte fehlen. Zuerst 'make gen' im Verzeichnis packages/schemas ausfuehren."
     )
 
 sys.path.insert(0, str(GEN_PYTHON))
@@ -44,4 +43,7 @@ def load_schema(name: str) -> dict:
 
 @pytest.fixture(scope="session")
 def schemas() -> dict[str, dict]:
-    return {p.name: json.loads(p.read_text(encoding="utf-8")) for p in GEN_JSONSCHEMA.glob("*.schema.json")}
+    return {
+        p.name: json.loads(p.read_text(encoding="utf-8"))
+        for p in GEN_JSONSCHEMA.glob("*.schema.json")
+    }

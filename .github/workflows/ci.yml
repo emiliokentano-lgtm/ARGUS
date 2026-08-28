@@ -1,0 +1,504 @@
+# ARGUS — Continuous Integration.
+#
+# Zeitbudget: unter 8 Minuten fuer einen typischen Pull Request. Erreicht wird
+# das durch drei Dinge, nicht durch schnellere Rechner:
+#
+#   1. Pfadfilter - ein Pull Request, der nur Python anfasst, faehrt weder die
+#      TypeScript- noch die Go-Kette.
+#   2. Caching - uv, pnpm, Go-Module und Docker-Schichten werden
+#      wiederverwendet. Ein Cache-Miss verlangsamt, er bricht nichts.
+#   3. Nebenlaeufigkeit - lint, typecheck und die Tests laufen parallel; nur
+#      der Integrationstest wartet auf den Compose-Stack.
+#
+# Flakes werden sichtbar gemacht, nicht versteckt: Integrationstests duerfen
+# wiederholt werden, aber jede Wiederholung erscheint als Warnung und in der
+# Job-Zusammenfassung. Ein Test, der nur beim zweiten Versuch gruen wird, ist
+# ein Befund.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Ein Pull Request, der zweimal hintereinander gepusht wird, braucht nur den
+# letzten Lauf.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+  GO_VERSION: "1.24"
+  # Reproduzierbare Installation: dieselben Versionen wie lokal.
+  UV_FROZEN: "1"
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Was hat sich geaendert? Alles Weitere haengt daran.
+  # ---------------------------------------------------------------------
+  changes:
+    name: Betroffene Bereiche
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      typescript: ${{ steps.filter.outputs.typescript }}
+      go: ${{ steps.filter.outputs.go }}
+      compose: ${{ steps.filter.outputs.compose }}
+      docker: ${{ steps.filter.outputs.docker }}
+      schemas: ${{ steps.filter.outputs.schemas }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - '**/*.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'packages/*/pyproject.toml'
+              - 'services/api/**'
+              - '.github/workflows/ci.yml'
+            typescript:
+              - '**/*.ts'
+              - '**/*.tsx'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'turbo.json'
+              - 'tsconfig.base.json'
+              - 'eslint.config.mjs'
+              - '.github/workflows/ci.yml'
+            go:
+              - '**/*.go'
+              - '**/go.mod'
+              - '**/go.sum'
+              - 'go.work'
+              - '.github/workflows/ci.yml'
+            compose:
+              - 'infra/compose/**'
+              - '.github/workflows/ci.yml'
+            docker:
+              - '**/Dockerfile'
+              - 'infra/compose/images/**'
+            schemas:
+              - 'packages/schemas/proto/**'
+
+  # ---------------------------------------------------------------------
+  # Linting — Form und Stil, alle Sprachen
+  # ---------------------------------------------------------------------
+  lint:
+    name: Lint
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # buf breaking vergleicht gegen main; ohne Historie geht das nicht.
+          fetch-depth: 0
+
+      - name: uv einrichten
+        if: needs.changes.outputs.python == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Python-Umgebung
+        if: needs.changes.outputs.python == 'true'
+        run: uv sync --all-packages
+
+      - name: Ruff
+        if: needs.changes.outputs.python == 'true'
+        run: |
+          .venv/bin/ruff check --output-format=github .
+          .venv/bin/ruff format --check .
+
+      - name: pnpm einrichten
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Node einrichten
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: TypeScript-Abhaengigkeiten
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Turborepo-Cache
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-lint-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-lint-${{ runner.os }}-
+
+      - name: ESLint, buf lint, Prettier
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        run: |
+          pnpm run lint
+          pnpm exec prettier --check .
+
+      - name: Go einrichten
+        if: needs.changes.outputs.go == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: gofmt und go vet
+        if: needs.changes.outputs.go == 'true'
+        run: |
+          unformatted=$(gofmt -l packages/go-runtime services/ingest-air services/ingest-sea)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Nicht formatierte Go-Dateien: $unformatted"
+            exit 1
+          fi
+          for m in packages/go-runtime services/ingest-air services/ingest-sea; do
+            (cd "$m" && go vet ./...)
+          done
+
+      - name: Compose-Stack statisch pruefen
+        if: needs.changes.outputs.compose == 'true'
+        run: python3 infra/compose/scripts/validate.py
+
+  # ---------------------------------------------------------------------
+  # Typpruefung
+  # ---------------------------------------------------------------------
+  typecheck:
+    name: Typpruefung
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        if: needs.changes.outputs.python == 'true'
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: mypy
+        if: needs.changes.outputs.python == 'true'
+        run: |
+          uv sync --all-packages
+          .venv/bin/mypy
+
+      - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Turborepo-Cache
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-typecheck-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-typecheck-${{ runner.os }}-
+
+      - name: tsc
+        if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.schemas == 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run typecheck
+
+  # ---------------------------------------------------------------------
+  # Unit-Tests — ohne Fremddienste
+  # ---------------------------------------------------------------------
+  unit-test:
+    name: Unit-Tests
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.typescript == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        if: needs.changes.outputs.python == 'true'
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: pytest
+        if: needs.changes.outputs.python == 'true'
+        run: |
+          uv sync --all-packages
+          .venv/bin/python -m pytest packages services \
+            -m "not integration" \
+            --junit-xml=junit-unit.xml \
+            --cov --cov-report=xml
+
+      - uses: actions/setup-go@v5
+        if: needs.changes.outputs.go == 'true'
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: go test
+        if: needs.changes.outputs.go == 'true'
+        run: |
+          for m in packages/go-runtime services/ingest-air services/ingest-sea; do
+            (cd "$m" && go test -race -coverprofile=coverage.out ./...)
+          done
+
+      - name: Testberichte sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            junit-unit.xml
+            coverage.xml
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------
+  # Integrationstests — gegen den echten Compose-Stack
+  # ---------------------------------------------------------------------
+  integration-test:
+    name: Integrationstests
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.compose == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://argus:argus_ci@localhost:5432/argus
+      ARGUS_TEST_POSTGRES_DSN: postgresql://argus:argus_ci@localhost:5432/argus
+      ARGUS_TEST_VALKEY_URL: redis://localhost:6379/9
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: vm.max_map_count fuer OpenSearch
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      - name: Compose-Konfiguration vorbereiten
+        run: |
+          cp infra/compose/.env.example infra/compose/.env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=argus_ci/' infra/compose/.env
+
+      - name: Docker-Schichten aus dem Cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.docker-cache
+          key: docker-${{ runner.os }}-${{ hashFiles('infra/compose/docker-compose.yml') }}
+          restore-keys: docker-${{ runner.os }}-
+
+      - name: Kerndienste starten
+        run: |
+          # Nur die Dienste, die die Tests brauchen. OpenSearch, ClickHouse und
+          # die Observability kosten Minuten und werden hier nicht geprueft.
+          cd infra/compose
+          docker compose up -d --wait --wait-timeout 300 postgres valkey nats nats-init minio minio-init
+
+      - name: Zustand pruefen
+        run: |
+          cd infra/compose
+          docker compose ps --all
+          ./scripts/health.sh || true
+
+      - name: Schema migrieren
+        run: |
+          uv sync --all-packages
+          cd services/api && DATABASE_URL="$DATABASE_URL" ../../.venv/bin/alembic upgrade head
+
+      - name: Integrationstests
+        id: pytest
+        run: |
+          # Wiederholung erlaubt, aber sichtbar: --reruns faengt echte
+          # Zeitfenster-Effekte ab, die Zusammenfassung unten macht jede
+          # Wiederholung sichtbar. Ein Test, der nur beim zweiten Versuch
+          # gruen wird, ist ein Befund und kein Erfolg.
+          .venv/bin/python -m pytest packages services \
+            --reruns 2 --reruns-delay 3 \
+            --junit-xml=junit-integration.xml
+
+      - name: Flakes sichtbar machen
+        if: always()
+        run: .venv/bin/python scripts/flake_report.py junit-integration.xml
+
+      - name: Protokolle bei Fehlschlag
+        if: failure()
+        run: |
+          cd infra/compose && docker compose logs --tail=200
+
+      - name: Testberichte sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: junit-integration.xml
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------
+  # Build — erzeugte Artefakte muessen entstehen koennen
+  # ---------------------------------------------------------------------
+  build:
+    name: Build
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: Abhaengigkeiten
+        run: |
+          uv sync --all-packages
+          pnpm install --frozen-lockfile
+
+      - name: Schemas erzeugen und pruefen
+        run: make -C packages/schemas check
+
+      - name: TypeScript bauen
+        run: pnpm run build
+
+      - name: Go bauen
+        run: |
+          for m in packages/go-runtime services/ingest-air services/ingest-sea; do
+            (cd "$m" && go build ./...)
+          done
+
+  # ---------------------------------------------------------------------
+  # Stueckliste und Schwachstellen
+  # ---------------------------------------------------------------------
+  sbom:
+    name: SBOM und Schwachstellen
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stueckliste erzeugen
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          artifact-name: argus.cdx.json
+          output-file: argus.cdx.json
+
+      - name: Schwachstellen pruefen
+        id: grype
+        uses: anchore/scan-action@v6
+        with:
+          sbom: argus.cdx.json
+          # Kritische Funde brechen den Build. Alles darunter erscheint im
+          # Bericht und wird im Review entschieden - eine Pipeline, die bei
+          # jedem 'medium' rot wird, wird binnen zwei Wochen umgangen.
+          fail-build: true
+          severity-cutoff: critical
+          output-format: sarif
+
+      - name: Befunde melden
+        if: always() && steps.grype.outputs.sarif != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: grype-dependencies
+
+  # ---------------------------------------------------------------------
+  # Container-Scan — nur wenn ein Dockerfile angefasst wurde
+  # ---------------------------------------------------------------------
+  container-scan:
+    name: Container-Scan
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Postgres-Image mit AGE bauen
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/compose/images/postgres-age
+          push: false
+          load: true
+          tags: argus/postgres-age:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image scannen
+        id: grype-image
+        uses: anchore/scan-action@v6
+        with:
+          image: argus/postgres-age:ci
+          fail-build: true
+          severity-cutoff: critical
+          output-format: sarif
+
+      - name: Befunde melden
+        if: always() && steps.grype-image.outputs.sarif != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.grype-image.outputs.sarif }}
+          category: grype-container
+
+  # ---------------------------------------------------------------------
+  # Sammelergebnis — ein einziger Pflicht-Check fuer den Branch-Schutz
+  # ---------------------------------------------------------------------
+  ci:
+    name: CI
+    if: always()
+    needs: [lint, typecheck, unit-test, integration-test, build, sbom, container-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ergebnis auswerten
+        run: |
+          # Uebersprungene Jobs sind in Ordnung - das ist der Pfadfilter bei
+          # der Arbeit. Fehlgeschlagene und abgebrochene sind es nicht.
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "Ergebnisse: $results"
+          for result in $results; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::Ein Job endete mit '$result'"; exit 1 ;;
+            esac
+          done
+          echo "Alle Pflichtjobs erfolgreich oder uebersprungen."

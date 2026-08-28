@@ -119,7 +119,9 @@ class RetrySettings(BaseModel):
 
 class MetricsSettings(BaseModel):
     enabled: bool = True
-    host: str = "0.0.0.0"
+    # In einem Container ist das die richtige Bindung: erreichbar ist der
+    # Port nur ueber das Container-Netz, nicht ueber das Hostinterface.
+    host: str = "0.0.0.0"  # noqa: S104
     port: int = 9100
 
 

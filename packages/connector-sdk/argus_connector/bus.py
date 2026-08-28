@@ -36,7 +36,7 @@ class PublishResult:
         return self.published + self.duplicates
 
 
-class BusUnavailable(ConnectorError):
+class BusUnavailableError(ConnectorError):
     kind = ErrorKind.BUS_UNAVAILABLE
 
 
@@ -44,7 +44,9 @@ class BusUnavailable(ConnectorError):
 class Publisher(Protocol):
     async def connect(self) -> None: ...
     async def publish(self, subject: str, payload: dict[str, Any], *, dedupe_key: str) -> bool: ...
-    async def publish_batch(self, messages: Sequence[tuple[str, dict[str, Any], str]]) -> PublishResult: ...
+    async def publish_batch(
+        self, messages: Sequence[tuple[str, dict[str, Any], str]]
+    ) -> PublishResult: ...
     async def close(self) -> None: ...
 
 
@@ -69,7 +71,7 @@ class MemoryPublisher:
 
     async def publish(self, subject: str, payload: dict[str, Any], *, dedupe_key: str) -> bool:
         if self._fail_after is not None and self._published >= self._fail_after:
-            raise BusUnavailable("Bus (simuliert) nicht erreichbar")
+            raise BusUnavailableError("Bus (simuliert) nicht erreichbar")
         self._published += 1
         if dedupe_key in self.seen_ids:
             self.duplicates += 1
@@ -126,8 +128,10 @@ class NatsPublisher:
                     max_reconnect_attempts=self._max_reconnect_attempts,
                     name="argus-connector",
                 )
-            except Exception as exc:  # noqa: BLE001
-                raise BusUnavailable(f"NATS unter {self._url} nicht erreichbar: {exc}") from exc
+            except Exception as exc:
+                raise BusUnavailableError(
+                    f"NATS unter {self._url} nicht erreichbar: {exc}"
+                ) from exc
         self._js = self._nc.jetstream()
 
     async def publish(self, subject: str, payload: dict[str, Any], *, dedupe_key: str) -> bool:
@@ -144,8 +148,10 @@ class NatsPublisher:
                 headers={"Nats-Msg-Id": dedupe_key},
                 stream=self._stream,
             )
-        except Exception as exc:  # noqa: BLE001
-            raise BusUnavailable(f"Veroeffentlichung auf {subject} fehlgeschlagen: {exc}") from exc
+        except Exception as exc:
+            raise BusUnavailableError(
+                f"Veroeffentlichung auf {subject} fehlgeschlagen: {exc}"
+            ) from exc
         if getattr(ack, "duplicate", False):
             self.duplicates += 1
             return False

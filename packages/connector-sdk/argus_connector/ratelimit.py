@@ -15,7 +15,7 @@ import asyncio
 import email.utils
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class TokenBucket:
         burst: int,
         *,
         clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], object] = asyncio.sleep,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         if rate <= 0:
             raise ValueError("rate muss groesser als 0 sein")
@@ -82,9 +82,7 @@ class TokenBucket:
     async def acquire(self, tokens: float = 1.0) -> float:
         """Wartet, bis `tokens` verfuegbar sind. Gibt die Wartezeit zurueck."""
         if tokens > self._burst:
-            raise ValueError(
-                f"{tokens} Tokens angefordert, aber der Eimer fasst nur {self._burst}"
-            )
+            raise ValueError(f"{tokens} Tokens angefordert, aber der Eimer fasst nur {self._burst}")
         waited = 0.0
         async with self._lock:
             while True:
@@ -146,7 +144,7 @@ class AdaptiveRateLimiter:
         min_requests_per_second: float = 0.1,
         politeness_delay_s: float = 0.0,
         clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], object] = asyncio.sleep,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         on_delay: Callable[[float], None] | None = None,
         on_rate_change: Callable[[float], None] | None = None,
     ) -> None:
@@ -238,7 +236,8 @@ class AdaptiveRateLimiter:
             self._paused_until = self._clock() + retry_after_s
             logger.warning(
                 "Gedrosselt: Rate auf %.3f/s, Pause %.1f s laut Retry-After",
-                self._bucket.rate, retry_after_s,
+                self._bucket.rate,
+                retry_after_s,
             )
         else:
             logger.warning("Gedrosselt: Rate auf %.3f/s", self._bucket.rate)

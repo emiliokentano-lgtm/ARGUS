@@ -56,7 +56,9 @@ def upgrade() -> None:
     )
     op.execute("CREATE INDEX tracks_entity_time_idx ON argus.tracks (entity_id, time_start DESC)")
     op.execute("CREATE INDEX tracks_open_idx ON argus.tracks (last_point_at DESC) WHERE is_open")
-    op.execute("CREATE INDEX tracks_bbox_idx ON argus.tracks USING gist (bbox) WHERE bbox IS NOT NULL")
+    op.execute(
+        "CREATE INDEX tracks_bbox_idx ON argus.tracks USING gist (bbox) WHERE bbox IS NOT NULL"
+    )
     op.execute(
         "CREATE TRIGGER tracks_set_updated_at BEFORE UPDATE ON argus.tracks "
         "FOR EACH ROW EXECUTE FUNCTION argus.set_updated_at()"
@@ -88,7 +90,9 @@ def upgrade() -> None:
         """
     )
     op.execute("CREATE INDEX track_gaps_track_idx ON argus.track_gaps (track_id, gap_start DESC)")
-    op.execute("CREATE INDEX track_gaps_flagged_idx ON argus.track_gaps (gap_start DESC) WHERE is_flagged")
+    op.execute(
+        "CREATE INDEX track_gaps_flagged_idx ON argus.track_gaps (gap_start DESC) WHERE is_flagged"
+    )
 
     op.execute(
         "ALTER TABLE argus.observations ADD CONSTRAINT observations_track_fk "

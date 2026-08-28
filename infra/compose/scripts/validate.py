@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 COMPOSE_DIR = Path(__file__).resolve().parent.parent
 BASE = COMPOSE_DIR / "docker-compose.yml"
@@ -53,11 +54,16 @@ def compose_config(files: list[Path]) -> dict:
     for f in files:
         args += ["-f", str(f)]
     args += ["--env-file", str(COMPOSE_DIR / ".env"), "config", "--format", "json"]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=COMPOSE_DIR)
+    # check=False: der Rueckgabewert wird ausgewertet, ein Fehler ist hier
+    # ein Befund und keine Ausnahme.
+    result = subprocess.run(args, capture_output=True, text=True, cwd=COMPOSE_DIR, check=False)
     if result.returncode != 0:
-        fail(f"'docker compose config' schlaegt fehl fuer {[f.name for f in files]}:\n{result.stderr.strip()}")
+        fail(
+            f"'docker compose config' schlaegt fehl fuer {[f.name for f in files]}:\n{result.stderr.strip()}"
+        )
         return {}
-    return json.loads(result.stdout)
+    parsed: dict[str, Any] = json.loads(result.stdout)
+    return parsed
 
 
 def parse_memory(value) -> float:
@@ -179,16 +185,16 @@ def main() -> int:
     if undocumented:
         fail(f"In .env.example fehlen: {', '.join(sorted(undocumented))}")
     else:
-        print(f"  {GRN}ok{OFF}  Alle {len(referenced)} referenzierten Variablen sind in .env.example dokumentiert")
+        print(
+            f"  {GRN}ok{OFF}  Alle {len(referenced)} referenzierten Variablen sind in .env.example dokumentiert"
+        )
 
     unused = documented - referenced - {"TZ", "COMPOSE_PROJECT_NAME"}
     # Variablen, die nur die Skripte benutzen, sind kein Fehler.
     script_text = "".join(
-        p.read_text(encoding="utf-8") for p in (COMPOSE_DIR / "scripts").glob("*")
-        if p.is_file()
+        p.read_text(encoding="utf-8") for p in (COMPOSE_DIR / "scripts").glob("*") if p.is_file()
     ) + "".join(
-        p.read_text(encoding="utf-8") for p in (COMPOSE_DIR / "init").rglob("*")
-        if p.is_file()
+        p.read_text(encoding="utf-8") for p in (COMPOSE_DIR / "init").rglob("*") if p.is_file()
     )
     truly_unused = {v for v in unused if v not in script_text}
     if truly_unused:
