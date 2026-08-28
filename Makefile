@@ -14,6 +14,7 @@ SHELL := /bin/bash
 COMPOSE_DIR := infra/compose
 COMPOSE     := docker compose
 SCHEMAS_DIR := packages/schemas
+API_DIR     := services/api
 
 # Dauerhaft laufende Kerndienste ohne Suche und Observability - fuer Rechner
 # mit wenig Arbeitsspeicher.
@@ -21,7 +22,8 @@ CORE_SERVICES := postgres nats valkey minio minio-init nats-init
 
 .PHONY: help up up-core up-base down reset restart logs ps health seed pull \
         preflight validate config images-check postgres-age-build \
-        psql clickhouse nats-cli schemas check
+        psql clickhouse nats-cli schemas check \
+        db-setup db-upgrade db-downgrade db-current db-test db-ddl db-load
 
 ## help: Diese Uebersicht
 help:
@@ -138,6 +140,44 @@ postgres-age-build:
 	@echo "Jetzt in $(COMPOSE_DIR)/.env eintragen:"
 	@echo "  POSTGRES_IMAGE=argus/postgres-age:local"
 	@echo "Danach: make reset && make up"
+
+# ---------------------------------------------------------------------------
+# Datenbankschema (services/api)
+# ---------------------------------------------------------------------------
+
+# DATABASE_URL zeigt standardmaessig auf den Dev-Stack aus infra/compose.
+DATABASE_URL ?= postgresql://argus:argus_dev_only@localhost:5432/argus
+API_PY := $(API_DIR)/.venv/bin/python
+
+## db-setup: Python-Umgebung fuer die Migrationen anlegen
+db-setup:
+	@cd $(API_DIR) && uv venv .venv && \
+	  uv pip install --python .venv/bin/python "alembic>=1.13" "psycopg[binary]>=3.1" pytest
+
+## db-upgrade: Schema auf den aktuellen Stand bringen
+db-upgrade:
+	@cd $(API_DIR) && DATABASE_URL="$(DATABASE_URL)" .venv/bin/alembic upgrade head
+
+## db-downgrade: Eine Migration zurueck (STEP=<ziel> fuer ein anderes Ziel)
+db-downgrade:
+	@cd $(API_DIR) && DATABASE_URL="$(DATABASE_URL)" .venv/bin/alembic downgrade $(or $(STEP),-1)
+
+## db-current: Aktueller Migrationsstand
+db-current:
+	@cd $(API_DIR) && DATABASE_URL="$(DATABASE_URL)" .venv/bin/alembic current --verbose
+
+## db-test: Migrations- und Schematests gegen eine echte Datenbank
+db-test:
+	@cd $(API_DIR) && DATABASE_URL="$(DATABASE_URL)" .venv/bin/python -m pytest
+
+## db-ddl: DDL-Referenz unter packages/schemas/sql/ neu erzeugen
+db-ddl:
+	@cd $(API_DIR) && DATABASE_URL="$(DATABASE_URL)" ./scripts/dump_schema.sh
+
+## db-load: Testbestand laden und Ladezeit messen (N=<zeilen>)
+db-load:
+	@cd $(API_DIR) && DATABASE_URL="$(DATABASE_URL)" \
+	  .venv/bin/python scripts/load_testdata.py --observations $(or $(N),1000000)
 
 # ---------------------------------------------------------------------------
 # Uebergreifend
