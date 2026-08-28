@@ -23,7 +23,8 @@ CORE_SERVICES := postgres nats valkey minio minio-init nats-init
 .PHONY: help up up-core up-base down reset restart logs ps health seed pull \
         preflight validate config images-check postgres-age-build \
         psql clickhouse nats-cli schemas check \
-        db-setup db-upgrade db-downgrade db-current db-test db-ddl db-load
+        db-setup db-upgrade db-downgrade db-current db-test db-ddl db-load \
+        sdk-setup sdk-test sdk-test-fast
 
 ## help: Diese Uebersicht
 help:
@@ -178,6 +179,26 @@ db-ddl:
 db-load:
 	@cd $(API_DIR) && DATABASE_URL="$(DATABASE_URL)" \
 	  .venv/bin/python scripts/load_testdata.py --observations $(or $(N),1000000)
+
+# ---------------------------------------------------------------------------
+# Konnektor-SDK (packages/connector-sdk)
+# ---------------------------------------------------------------------------
+
+SDK_DIR := packages/connector-sdk
+
+## sdk-setup: Python-Umgebung fuer das Konnektor-SDK anlegen
+sdk-setup:
+	@cd $(SDK_DIR) && uv venv .venv && \
+	  uv pip install --python .venv/bin/python -e ".[all,dev]"
+
+## sdk-test: SDK-Tests mit Abdeckung. Postgres und Valkey werden benutzt, wenn erreichbar.
+sdk-test:
+	@cd $(SDK_DIR) && ARGUS_TEST_POSTGRES_DSN="$(DATABASE_URL)" \
+	  .venv/bin/python -m pytest --cov=argus_connector --cov-report=term-missing
+
+## sdk-test-fast: SDK-Tests ohne die langsamen Integrationstests
+sdk-test-fast:
+	@cd $(SDK_DIR) && .venv/bin/python -m pytest -m "not slow" -q
 
 # ---------------------------------------------------------------------------
 # Uebergreifend
