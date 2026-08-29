@@ -239,7 +239,7 @@ mit welchem Schritt es gefüllt wird.
 ## 9. Architekturentscheidungen
 
 Alles unter `docs/adr/`, fortlaufend nummeriert, Vorlage in
-`docs/adr/0000-template.md`.
+`docs/adr/0000-template.md`, Bestand und Regeln in `docs/adr/README.md`.
 
 Ein ADR wird geschrieben, **bevor** der Code entsteht, nicht danach. Der
 wichtigste Abschnitt ist **Verworfene Alternativen** — er beantwortet die
@@ -247,3 +247,6 @@ Frage, die in zwei Jahren gestellt wird.
 
 Ein zurückgezogenes ADR bleibt stehen und wird als solches markiert. Die
 Historie ist der Punkt.
+
+Jedes ADR nennt **negative** Konsequenzen und **messbare Bedingungen für eine
+Revision**. Eine reine Vorteilsliste ist kein ADR, sondern eine Werbebroschüre.

@@ -25,7 +25,7 @@ def upgrade() -> None:
 
             -- Hierarchischer Taxonomiepfad, punktgetrennt und von grob nach
             -- fein: 'economic.rate_decision'. Bewusst kein Enum - die
-            -- Taxonomie waechst schneller als das Schema (siehe ADR 0003).
+            -- Taxonomie waechst schneller als das Schema (siehe ADR 0006).
             type             text NOT NULL,
             title            text NOT NULL,
             summary          text,

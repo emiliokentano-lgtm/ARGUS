@@ -1,7 +1,7 @@
 """H3-Indizes zwischen Zeichenkette und Ganzzahl.
 
 Die Protobuf-Schemas fuehren H3-Indizes als Zeichenkette (`"871f0d4c2ffffff"`),
-die Datenbank als `bigint` (Prompt 3, ADR 0003). Der Grund fuer die Ganzzahl:
+die Datenbank als `bigint` (Prompt 3, ADR 0006). Der Grund fuer die Ganzzahl:
 ein Vergleich auf 64 Bit ist um ein Vielfaches billiger als auf einer
 Zeichenkette, und Viewport-Abfragen machen nichts anderes als vergleichen.
 

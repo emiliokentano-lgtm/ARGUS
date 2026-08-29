@@ -357,7 +357,7 @@ def upgrade() -> None:
     # Volltextkonfiguration je Sprache. Muss IMMUTABLE sein, damit sie in
     # generierten tsvector-Spalten benutzt werden darf. Eine spaetere Aenderung
     # der Zuordnung macht bestehende tsvector-Spalten veraltet; dann ist ein
-    # UPDATE der betroffenen Zeilen noetig (siehe docs/adr/0003).
+    # UPDATE der betroffenen Zeilen noetig (siehe docs/adr/0006).
     op.execute(
         """
         CREATE FUNCTION argus.ts_config(lang text) RETURNS regconfig

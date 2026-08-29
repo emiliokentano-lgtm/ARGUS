@@ -36,7 +36,7 @@ COLUMNS = """
     -- ein Partitionsschluessel nicht NULL sein darf. Das Protobuf-Feld ist
     -- optional; fehlt es, setzt die Pipeline hier ingested_at ein UND
     -- time_quality auf 'inferred_from_ingest'. Die Unterscheidung geht damit
-    -- nicht verloren, sie wandert nur in eine eigene Spalte (siehe ADR 0003).
+    -- nicht verloren, sie wandert nur in eine eigene Spalte (siehe ADR 0006).
     observed_at     timestamptz NOT NULL,
     time_quality    argus.time_quality NOT NULL DEFAULT 'source_provided',
     ingested_at     timestamptz NOT NULL DEFAULT clock_timestamp(),

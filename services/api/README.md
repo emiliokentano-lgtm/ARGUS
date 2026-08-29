@@ -6,7 +6,7 @@ unter `packages/schemas/sql/` wird daraus erzeugt und nie von Hand gepflegt.
 
 Die Protobuf-Schemas aus `packages/schemas/` bleiben die Wahrheitsquelle für die
 _Datenstrukturen auf der Leitung_. Wo die Abbildung auf PostgreSQL bewusst nicht
-1:1 ist, steht die Begründung in [ADR 0003](../../docs/adr/0003-datenmodell.md).
+1:1 ist, steht die Begründung in [ADR 0006](../../docs/adr/0006-datenmodell.md).
 
 ---
 
@@ -140,7 +140,7 @@ und `case_notes` (erben die Sichtbarkeit ihres Cases). Rollen: `argus_readonly`,
   für die API kommen später und müssen dem DDL folgen, nicht umgekehrt.
 - **Verlaufstabellen wachsen unbegrenzt.** Bei viel geänderten Objekten
   verdoppeln sie den Speicherbedarf. Eine Auslagerung nach ClickHouse ist der
-  Revisionspunkt in ADR 0003.
+  Revisionspunkt in ADR 0006.
 - **Enum-Erweiterungen brauchen eine eigene Migration** —
   `ALTER TYPE ... ADD VALUE` ist in PostgreSQL nicht in derselben Transaktion
   benutzbar, in der der Typ entsteht.

@@ -1,8 +1,14 @@
-# ADR 0003 — Datenmodell in PostgreSQL
+# ADR 0006 — Datenmodell in PostgreSQL
 
 **Status:** angenommen
 **Datum:** 2026-08-28
 **Betrifft:** `services/api/migrations/`, `packages/schemas/sql/`
+
+> Dieses ADR trug bis zum 2026-08-29 die Nummer 0003. Es wurde auf 0006
+> umnummeriert, weil die Nummern 0001–0005 den Grundsatzentscheidungen
+> zugewiesen sind, auf denen es aufbaut. Umnummerierung ist ausdrücklich die
+> Ausnahme (siehe `docs/adr/README.md`); sie war hier möglich, weil noch kein
+> Release existiert und alle Verweise im Repository mitgezogen wurden.
 
 ---
 
