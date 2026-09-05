@@ -119,6 +119,19 @@ vorhanden, `test`, `build`) sowie eine `tsconfig.json`, die von
 `GO_MODULES` im Makefile — im Workspace-Modus greift `./...` nicht über
 Modulgrenzen hinweg.
 
+**Testdateinamen sind repositoryweit eindeutig.** pytest importiert Testdateien
+ohne `__init__.py` unter ihrem bloßen Dateinamen; zwei `test_roundtrip.py` in
+verschiedenen Paketen ergeben denselben Modulnamen und brechen die Sammlung ab.
+Der Fehler tritt erst auf, wenn beide Pakete in _einem_ Lauf gesammelt werden —
+wer nur sein eigenes Paket testet, sieht ihn nie. Der Hook
+`unique-test-module-names` fängt das ab; der Name sagt am besten, welches Paket
+gemeint ist (`test_schema_conformance.py`, nicht `test_roundtrip.py`).
+
+**Die Sprache eines Dienstes ist eine Entscheidung mit Messwert.** Sie wird im
+README des Dienstes begründet, zusammen mit der Bedingung, unter der sie
+umgekehrt wird. „Go wegen des Durchsatzes" ohne Zahl ist keine Begründung —
+siehe `services/ingest-sea/README.md`.
+
 ---
 
 ## 5. Definition of Done

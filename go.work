@@ -1,15 +1,19 @@
 // ARGUS — Go-Workspace.
 //
-// Die Hochlast-Konnektoren sind in Go geschrieben (Konzept, Kapitel 15). Sie
-// teilen sich das Laufzeitpaket unter packages/go-runtime; go.work verbindet
-// die Module, ohne dass eines von ihnen veroeffentlicht sein muss.
+// Konnektoren, die in Go geschrieben sind, teilen sich das Laufzeitpaket unter
+// packages/go-runtime; go.work verbindet die Module, ohne dass eines von ihnen
+// veroeffentlicht sein muss.
 //
 // Ein Dienst tritt dem Workspace erst bei, wenn er eine go.mod hat - die
 // uebrigen Verzeichnisse unter services/ sind Python oder noch leer.
+//
+// services/ingest-sea war hier bis Prompt 7 als Go-Geruest eingetragen. Der
+// AIS-Konnektor ist jetzt Python auf dem Konnektor-Framework aus Prompt 4;
+// die Begruendung und die Bedingung, unter der er nach Go zurueckwandert,
+// stehen in services/ingest-sea/README.md.
 go 1.24
 
 use (
 	./packages/go-runtime
 	./services/ingest-air
-	./services/ingest-sea
 )

@@ -32,6 +32,14 @@ repos:
         stages: [pre-commit]
         exclude: '^(infra/compose/\.env\.example|.*\.lock|pnpm-lock\.yaml|uv\.lock)$'
 
+      - id: unique-test-module-names
+        name: Testmodulnamen eindeutig
+        entry: python3 scripts/hooks/check_test_module_names.py
+        language: system
+        pass_filenames: false
+        files: '^(packages|services|apps|infra)/.*/test_.*\.py$'
+        stages: [pre-commit]
+
       - id: conventional-commit
         name: Commit-Format (Conventional Commits)
         entry: python3 scripts/hooks/check_commit_message.py

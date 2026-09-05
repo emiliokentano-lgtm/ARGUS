@@ -59,7 +59,7 @@ ein README, das sagt, wofür es da ist und mit welchem Schritt es gefüllt wird.
 
 ```
 apps/            web (War Room) · api (REST/WS/GraphQL) · bot
-services/        Konnektoren und Pipeline-Dienste · api (DB-Schema, Migrationen)
+services/        api (DB-Schema, Migrationen) · ingest-sea (AIS) · ingest-air (ADS-B)
 packages/        schemas (Wahrheitsquelle) · connector-sdk · geo · go-runtime · ui-kit
 infra/compose/   Dev-Stack
 docs/adr/        Architekturentscheidungen
@@ -70,7 +70,10 @@ Drei Sprachen, drei Werkzeugketten, ein Repository:
 - **Python** (uv-Workspace, eine `.venv` an der Wurzel) — Konnektoren,
   Anreicherung, Migrationen, Werkzeuge.
 - **TypeScript** (pnpm-Workspace, Turborepo) — Frontend und geteilte Pakete.
-- **Go** (go.work) — Hochlast-Ingest, wo das Speicherverhalten zählt.
+- **Go** (go.work) — Hochlast-Ingest, wo das Speicherverhalten zählt. Welcher
+  Dienst welche Sprache bekommt, wird gemessen und nicht angenommen:
+  `services/ingest-sea` ist Python, weil die Messung es hergibt (Begründung und
+  Umkehrbedingung in dessen README).
 
 `packages/schemas` ist die **einzige Wahrheitsquelle** für Datenstrukturen.
 Alle Sprachen erzeugen ihre Typen daraus; es gibt keine handgeschriebene

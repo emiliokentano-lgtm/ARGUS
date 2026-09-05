@@ -27,9 +27,9 @@ PYTEST := $(PY) -m pytest
 
 # Go arbeitet im Workspace-Modus; './...' greift dort nicht ueber Modulgrenzen
 # hinweg, deshalb die ausdrueckliche Liste.
-GO_MODULES := packages/go-runtime services/ingest-air services/ingest-sea
+GO_MODULES := packages/go-runtime services/ingest-air
 # Nur diese Module haben ein main-Paket und ergeben ein Binary.
-GO_SERVICES := services/ingest-air services/ingest-sea
+GO_SERVICES := services/ingest-air
 
 # Dauerhaft laufende Kerndienste ohne Suche und Observability.
 CORE_SERVICES := postgres nats valkey minio minio-init nats-init

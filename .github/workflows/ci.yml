@@ -66,6 +66,7 @@ jobs:
               - 'uv.lock'
               - 'packages/*/pyproject.toml'
               - 'services/api/**'
+              - 'services/ingest-sea/**'
               - '.github/workflows/ci.yml'
             typescript:
               - '**/*.ts'
@@ -161,12 +162,12 @@ jobs:
       - name: gofmt und go vet
         if: needs.changes.outputs.go == 'true'
         run: |
-          unformatted=$(gofmt -l packages/go-runtime services/ingest-air services/ingest-sea)
+          unformatted=$(gofmt -l packages/go-runtime services/ingest-air)
           if [ -n "$unformatted" ]; then
             echo "::error::Nicht formatierte Go-Dateien: $unformatted"
             exit 1
           fi
-          for m in packages/go-runtime services/ingest-air services/ingest-sea; do
+          for m in packages/go-runtime services/ingest-air; do
             (cd "$m" && go vet ./...)
           done
 
@@ -256,7 +257,7 @@ jobs:
       - name: go test
         if: needs.changes.outputs.go == 'true'
         run: |
-          for m in packages/go-runtime services/ingest-air services/ingest-sea; do
+          for m in packages/go-runtime services/ingest-air; do
             (cd "$m" && go test -race -coverprofile=coverage.out ./...)
           done
 
@@ -392,7 +393,7 @@ jobs:
 
       - name: Go bauen
         run: |
-          for m in packages/go-runtime services/ingest-air services/ingest-sea; do
+          for m in packages/go-runtime services/ingest-air; do
             (cd "$m" && go build ./...)
           done
 

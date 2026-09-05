@@ -49,12 +49,14 @@ members = [
     "packages/geo",
     "packages/schemas",
     "services/api",
+    "services/ingest-sea",
 ]
 
 [tool.uv.sources]
 argus-connector-sdk = { workspace = true }
 argus-geo = { workspace = true }
 argus-schemas = { workspace = true }
+argus-ingest-sea = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -142,6 +144,12 @@ ignore = [
     "PLR0915",  # Pruefskripte sind lang, aber geradeaus
 ]
 "**/tools/**" = ["T20", "PLR0915"]
+"**/tests/test_throughput.py" = [
+    # Messwerte gehoeren in die Ausgabe. Eine Durchsatzzahl, die nur in einer
+    # Zusicherung steckt, ist nach dem Lauf verloren - und dann steht in der
+    # Abnahme "der Test war gruen" statt "4.200 Nachrichten/s".
+    "T201",
+]
 "**/conftest.py" = ["S101", "SLF001"]
 
 [tool.ruff.lint.isort]
@@ -174,6 +182,7 @@ files = [
     "packages/geo/argus_geo",
     "packages/schemas/tools",
     "services/api/argus_migrations.py",
+    "services/ingest-sea/aisstream",
     "services/api/scripts",
     "infra/compose/scripts",
 ]
@@ -182,7 +191,7 @@ explicit_package_bases = true
 # Wurzeln der Importpfade. Ohne sie findet mypy dieselbe Datei unter zwei
 # Modulnamen (einmal ueber das installierte Paket, einmal ueber den Quellbaum)
 # und bricht ab.
-mypy_path = "packages/connector-sdk:packages/geo:packages/schemas:services/api:infra/compose"
+mypy_path = "packages/connector-sdk:packages/geo:packages/schemas:services/api:services/ingest-sea:infra/compose"
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -203,7 +212,7 @@ strict_equality = true
 # Per-Modul-Schalter - mypy wendet ihn global an. Die Einzelflaggen sind der
 # einzige Weg, Strenge wirklich auf ein Paket zu begrenzen.
 [[tool.mypy.overrides]]
-module = ["argus_connector.*", "argus_geo.*"]
+module = ["argus_connector.*", "argus_geo.*", "aisstream.*"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_calls = true
@@ -222,6 +231,10 @@ module = [
     "boto3.*",
     "alembic.*",
     "psycopg.*",
+    # H3 liefert keine Typinformationen mit. Die Bibliothek wird an genau
+    # einer Stelle benutzt (normalize._h3_cells), und der Rueckgabetyp ist
+    # dort ausdruecklich annotiert.
+    "h3.*",
 ]
 ignore_missing_imports = true
 

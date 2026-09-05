@@ -1,0 +1,26 @@
+[project]
+name = "argus-ingest-sea"
+version = "0.1.0"
+description = "ARGUS — maritimer Echtzeit-Konnektor (AIS ueber AISStream.io)."
+requires-python = ">=3.11"
+dependencies = [
+    "argus-connector-sdk",
+    "argus-geo",
+    # WebSocket-Client. Bewusst 'websockets' und nicht aiohttp: der Konnektor
+    # braucht genau einen dauerhaften WebSocket und sonst nichts, und
+    # websockets liefert die Abbruchsemantik (ConnectionClosedError vs.
+    # ConnectionClosedOK) fein genug, um "sauber geschlossen" von "Leitung
+    # weg" zu unterscheiden. Genau diese Unterscheidung ist der Kern der
+    # Wiederverbindungslogik.
+    "websockets>=13",
+    # H3-Zellen aus Lat/Lon. Die eigentliche Berechnung, nicht nur die
+    # Umrechnung zwischen Zeichenkette und bigint (die kommt aus argus-geo).
+    "h3>=4.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["aisstream"]
