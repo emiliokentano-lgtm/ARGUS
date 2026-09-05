@@ -24,7 +24,11 @@
     },
     "build": {
       "dependsOn": ["^build", "generate"],
-      "outputs": ["dist/**", "gen/**"]
+      // .next/cache ist ausgenommen: der Ordner ist gross, aendert sich bei
+      // jedem Lauf und gehoert in Vercels eigenen Build-Cache, nicht in den
+      // von Turbo. Ihn mitzunehmen macht jeden Cache-Treffer teurer als den
+      // Build, den er spart.
+      "outputs": ["dist/**", "gen/**", ".next/**", "!.next/cache/**"]
     }
   }
 }

@@ -76,6 +76,7 @@ jobs:
               - 'turbo.json'
               - 'tsconfig.base.json'
               - 'eslint.config.mjs'
+              - 'apps/**'
               - '.github/workflows/ci.yml'
             go:
               - '**/*.go'

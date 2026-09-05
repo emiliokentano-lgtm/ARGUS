@@ -58,7 +58,7 @@ ein README, das sagt, wofür es da ist und mit welchem Schritt es gefüllt wird.
 ## Aufbau
 
 ```
-apps/            web (War Room) · api (REST/WS/GraphQL) · bot
+apps/            web (War Room, Next.js) · api (REST/WS/GraphQL) · bot
 services/        api (DB-Schema, Migrationen) · ingest-sea (AIS) · ingest-air (ADS-B)
 packages/        schemas (Wahrheitsquelle) · connector-sdk · geo · go-runtime · ui-kit
 infra/compose/   Dev-Stack

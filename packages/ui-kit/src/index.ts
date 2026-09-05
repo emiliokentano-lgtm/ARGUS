@@ -4,5 +4,5 @@ export {
   priorityLevelForScore,
   staleness,
   stalenessFor,
-} from "./tokens.js";
-export type { PriorityLevel, PriorityToken, StalenessLevel } from "./tokens.js";
+} from "./tokens";
+export type { PriorityLevel, PriorityToken, StalenessLevel } from "./tokens";
